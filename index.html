@@ -1,0 +1,2354 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#16181c">
+<meta name="color-scheme" content="dark">
+<title>ONE MORE SIDE</title>
+<style>
+:root{
+  --bg:#16181c;
+  --bg2:#1d2026;
+  --line:#2c3038;
+  --bone:#ece7dc;
+  --bone-dim:#9aa0a8;
+  --amber:#f0a830;
+  --gold:#ffcf5c;
+  --cyan:#57d6e0;
+  --ok:#7fd48b;
+  --shadow:#0e1013;
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%}
+body{
+  background:var(--bg);
+  color:var(--bone);
+  font-family:ui-monospace,"SF Mono",Menlo,Consolas,"Roboto Mono",monospace;
+  font-variant-numeric:tabular-nums;
+  overflow:hidden;
+  user-select:none;-webkit-user-select:none;
+  touch-action:manipulation;
+  overscroll-behavior:none;
+}
+#app{
+  position:fixed;inset:0;
+  display:flex;flex-direction:column;
+  max-width:460px;margin:0 auto;
+  padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+}
+
+/* ---- 0-56px: coin counter ---- */
+#hud{
+  position:relative;flex:0 0 auto;height:56px;
+  display:flex;align-items:center;justify-content:center;
+}
+#coins{font-size:30px;letter-spacing:.5px;font-weight:600;color:var(--bone)}
+#coins.pop{animation:coinpop 180ms ease-out}
+@keyframes coinpop{0%{transform:scale(1.07)}100%{transform:scale(1)}}
+/* 44px is the spec's floor for every target. The icons stay 19px; only the hit
+   area grows, so mute and settings can no longer be confused for each other. */
+.corner{
+  position:absolute;top:6px;width:44px;height:44px;border:0;background:none;
+  color:var(--bone-dim);display:flex;align-items:center;justify-content:center;
+  cursor:pointer;border-radius:8px;
+}
+.corner:active{background:var(--bg2)}
+#muteBtn{right:2px}
+#gearBtn{right:46px}
+.corner svg{width:19px;height:19px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+
+/* ---- 56-120px: readout ---- */
+#readout{
+  flex:0 0 auto;height:64px;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+}
+#maxroll{font-size:13px;letter-spacing:3px;color:var(--bone-dim)}
+#maxroll b{color:var(--amber);font-weight:600}
+#chips{display:flex;gap:6px;align-items:center;min-height:22px}
+/* Hot Hand is one of only two ad placements, so it must be easy to hit. The
+   chip still reads as a small flame chip; a transparent overlay takes the
+   target to 44px without changing what the player sees. */
+.chip{
+  position:relative;display:none;align-items:center;gap:5px;height:22px;padding:0 14px;
+  border:1px solid var(--line);border-radius:11px;
+  font-size:10px;letter-spacing:1.5px;color:var(--bone-dim);background:var(--bg2);
+  cursor:pointer;
+}
+.chip::before{content:"";position:absolute;left:0;right:0;top:-11px;bottom:-11px}
+.chip.show{display:flex}
+.chip.armed{border-color:var(--amber);color:var(--amber)}
+.chip.live{border-color:var(--gold);color:var(--gold);background:#2a2214}
+
+/* ---- canvas ---- */
+#stageWrap{flex:1 1 auto;position:relative;min-height:0}
+#stage{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#hint{
+  position:absolute;left:50%;bottom:14%;transform:translateX(-50%);
+  pointer-events:none;opacity:.75;animation:hintpulse 1.6s ease-in-out infinite;
+}
+#hint svg{width:34px;height:34px;fill:none;stroke:var(--bone);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+@keyframes hintpulse{0%,100%{transform:translateX(-50%) translateY(0);opacity:.3}50%{transform:translateX(-50%) translateY(-7px);opacity:.9}}
+#hint.gone{display:none}
+
+/* ---- shop ---- */
+#shop{
+  flex:0 0 auto;padding:6px 12px 12px;display:flex;flex-direction:column;gap:8px;
+}
+/* ?dev=1 only: the debug bar is fixed to the bottom-left and used to sit on top
+   of the ROLLER card at phone width */
+#app.devon #shop{padding-bottom:78px}
+.btn{
+  position:relative;display:flex;align-items:center;gap:12px;
+  width:100%;height:64px;padding:0 14px 0 8px;
+  background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  color:var(--bone);font:inherit;text-align:left;cursor:pointer;
+  transition:border-color 120ms,background 120ms,transform 60ms;
+}
+.btn[hidden]{display:none}
+.btn.enter{animation:slideup 320ms cubic-bezier(.2,.9,.3,1.2)}
+@keyframes slideup{from{transform:translateY(70px);opacity:0}to{transform:none;opacity:1}}
+.btn.ready{border-color:var(--amber)}
+.btn.ready .price{color:var(--amber)}
+.btn:active{transform:scale(.985)}
+.btn:disabled{cursor:default;opacity:1}
+.btn.locked{opacity:.55}
+.ringwrap{position:relative;flex:0 0 48px;width:48px;height:48px}
+.ringwrap svg{position:absolute;inset:0;width:48px;height:48px}
+.ring-bg{fill:none;stroke:var(--line);stroke-width:3}
+.ring-fg{fill:none;stroke:var(--amber);stroke-width:3;stroke-linecap:round;
+  transform:rotate(-90deg);transform-origin:24px 24px;transition:stroke-dashoffset 140ms linear}
+.glyph{stroke:var(--bone);stroke-width:1.6;fill:none;stroke-linejoin:round}
+.btn.locked .glyph{stroke:var(--bone-dim);stroke-dasharray:3 3;opacity:.7}
+.btn.ready .glyph{stroke:var(--gold)}
+.labels{display:flex;flex-direction:column;gap:3px;min-width:0;flex:1 1 auto}
+.name{font-size:15px;letter-spacing:2.5px;font-weight:600;white-space:nowrap}
+.sub{font-size:11px;letter-spacing:1px;color:var(--bone-dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.price{font-size:15px;letter-spacing:.5px;color:var(--bone-dim);flex:0 0 auto}
+#btn-recast{border-color:#5a3f6b}
+#btn-recast.ready{border-color:var(--gold)}
+
+/* ---- panels ---- */
+.panel{
+  position:fixed;inset:0;z-index:20;display:none;
+  align-items:center;justify-content:center;padding:24px;
+  background:rgba(12,13,16,.86);backdrop-filter:blur(3px);
+}
+.panel.show{display:flex}
+.card{
+  width:100%;max-width:340px;background:var(--bg2);
+  border:1px solid var(--line);border-radius:16px;padding:20px;
+  display:flex;flex-direction:column;gap:14px;
+}
+.card h2{font-size:15px;letter-spacing:3px;color:var(--bone-dim);font-weight:600;text-align:center}
+.card .big{font-size:30px;text-align:center;color:var(--gold)}
+.card p{font-size:12px;line-height:1.6;color:var(--bone-dim);letter-spacing:.5px}
+.card .keep{font-size:12px;line-height:1.7;letter-spacing:.5px}
+.card .keep b{color:var(--bone)}
+.cta{
+  height:56px;border-radius:12px;border:1px solid var(--amber);background:#2a2214;
+  color:var(--gold);font:inherit;font-size:15px;letter-spacing:3px;cursor:pointer;
+}
+.cta:active{transform:scale(.985)}
+.cta.ghost{border-color:var(--line);background:transparent;color:var(--bone-dim);height:46px;font-size:12px}
+.cta.danger{border-color:#8a4a4a;color:#e08a8a;background:transparent}
+.row{display:flex;gap:8px}
+.row .cta{flex:1}
+#adOverlay{z-index:40;background:rgba(8,9,11,.96)}
+#adBox{text-align:center;display:flex;flex-direction:column;gap:16px;align-items:center}
+#adBox .tag{font-size:10px;letter-spacing:3px;color:var(--bone-dim);border:1px solid var(--line);padding:5px 10px;border-radius:6px}
+#adBar{width:200px;height:3px;background:var(--line);border-radius:2px;overflow:hidden}
+#adBarFill{height:100%;width:0;background:var(--amber)}
+
+/* ---- dev ---- */
+#dev{
+  position:fixed;left:8px;bottom:8px;z-index:50;display:none;
+  flex-wrap:wrap;gap:6px;max-width:300px;
+  padding:5px;border-radius:8px;background:rgba(16,18,22,.92);
+}
+#dev.show{display:flex}
+#dev button{
+  font:inherit;font-size:10px;letter-spacing:1px;padding:6px 8px;
+  background:#241f2e;color:#c9b8e0;border:1px solid #453a55;border-radius:6px;cursor:pointer;
+}
+</style>
+</head>
+<body>
+
+<div id="app">
+  <div id="hud">
+    <div id="coins">0</div>
+    <button id="gearBtn" class="corner" aria-label="Settings">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.6 1.6M7.2 16.8l-1.6 1.6M18.4 18.4l-1.6-1.6M7.2 7.2 5.6 5.6"/></svg>
+    </button>
+    <button id="muteBtn" class="corner" aria-label="Sound">
+      <svg id="muteIcon" viewBox="0 0 24 24"><path d="M4 9v6h4l5 4V5L8 9H4z"/><path id="wave1" d="M16.5 8.5a5 5 0 0 1 0 7"/><path id="wave2" d="M19 6a8.5 8.5 0 0 1 0 12"/><path id="slash" d="M3 3l18 18" style="display:none"/></svg>
+    </button>
+  </div>
+
+  <div id="readout">
+    <div id="maxroll">MAX ROLL <b id="maxrollN">1</b></div>
+    <div id="chips"><button id="hotChip" class="chip" type="button">HOT HAND</button></div>
+  </div>
+
+  <div id="stageWrap">
+    <canvas id="stage"></canvas>
+    <div id="hint"><svg viewBox="0 0 24 24"><path d="M9 11V6.5a1.8 1.8 0 0 1 3.6 0V11m0-1.2a1.6 1.6 0 0 1 3.2 0V12m0-1a1.6 1.6 0 0 1 3.2 0v4.5c0 3-2.2 5.5-5.4 5.5H12c-2.2 0-3.4-1-4.4-2.6L5 13.4a1.7 1.7 0 0 1 2.9-1.7L9 13.5"/></svg></div>
+  </div>
+
+  <div id="shop"></div>
+</div>
+
+<div id="offlinePanel" class="panel">
+  <div class="card">
+    <h2>WELCOME BACK</h2>
+    <div class="big" id="offAmt">0</div>
+    <p id="offLine">You were away.</p>
+    <button class="cta" id="offCollect">COLLECT</button>
+    <button class="cta ghost" id="offDouble">WATCH AD &middot; DOUBLE IT</button>
+  </div>
+</div>
+
+<div id="recastPanel" class="panel">
+  <div class="card">
+    <h2>RECAST</h2>
+    <div class="keep" id="recastKeep"></div>
+    <p id="recastCost"></p>
+    <div class="row">
+      <button class="cta ghost" id="recastNo">NOT YET</button>
+      <button class="cta" id="recastYes">RECAST</button>
+    </div>
+  </div>
+</div>
+
+<div id="settingsPanel" class="panel">
+  <div class="card">
+    <h2>SETTINGS</h2>
+    <button class="cta ghost" id="setMute">SOUND: ON</button>
+    <button class="cta ghost danger" id="setReset">HOLD TO ERASE EVERYTHING</button>
+    <p id="resetHint">Hold the button for two seconds. There is no undo.</p>
+    <button class="cta ghost" id="setClose">CLOSE</button>
+  </div>
+</div>
+
+<div id="adOverlay" class="panel">
+  <div id="adBox">
+    <div class="tag">DEV PLACEHOLDER &mdash; NO REAL AD NETWORK</div>
+    <div class="big" id="adTitle">REWARD</div>
+    <div id="adBar"><div id="adBarFill"></div></div>
+  </div>
+</div>
+
+<div id="dev"></div>
+
+<script id="economy">
+/* ============================================================================
+   ECONOMY CORE. Pure numbers and state transitions. No DOM, no timers, no
+   strings the player ever sees. sim.js extracts this exact block, so the
+   simulator and the game can never disagree about a single constant.
+   ========================================================================== */
+(function (global) {
+'use strict';
+
+/* Currency helpers. Every currency operation goes through these so swapping in
+   a bignum later is mechanical rather than a rewrite. */
+function add(a, b) { return a + b; }
+function sub(a, b) { return a - b; }
+function mul(a, b) { return a * b; }
+function cmp(a, b) { return a < b ? -1 : a > b ? 1 : 0; }
+function gte(a, b) { return cmp(a, b) >= 0; }
+
+var K = {
+  SAVE_KEY: 'oms.save.v1',
+  SAVE_VERSION: 1,
+
+  MAX_SIDES: 20,
+  MAX_DICE: 3,
+  /* Spec value 8, then 10. Raised again after simulating a player who never
+     presses RECAST - the most common idle-game behaviour there is, because
+     resetting feels like losing. With the roller capped at Lv10 that player hit
+     a 52.3-minute stretch at t=309 min with nothing affordable, breaking
+     invariant 2's 45-minute bound outright, and then an empty shop for good at
+     t=361 min. One more level at the same growth gives that tail a second thing
+     to buy and takes the worst never-prestige wait to 39 min.
+     NOTE the direction is not monotonic: Lv13 and Lv14 make it far WORSE (106
+     and 237 min), because once sides are maxed the only item left is a roller
+     level costing hundreds of millions. Lv11 is the measured optimum. */
+  MAX_ROLLER_LEVEL: 11,
+  /* Content honestly ends after run 3 (spec section 4). Without this the Recast
+     bar scales with the multiplier it pays for, so recasting the instant it
+     lights up pays a flat 12 shards forever and the multiplier has no ceiling. */
+  MAX_RECASTS: 3,
+
+  FACE_GROWTH: 1.55,
+
+  SIDE_BASE: 10,
+  /* Spec value 1.95. Raised after simulation: at 1.95 the reference bot burned
+     through all three runs in 49 minutes against a 150-minute target, and every
+     other milestone landed 20-40% early. Side growth is the lever the spec
+     names for exactly this, and V(n) is untouched. */
+  SIDE_GROWTH: 2.2,
+  SIDE_UNIT_MULT: 4,
+
+  ROLLER_BASE: 600,
+  /* Spec value 3.2, lowered with MAX_ROLLER_LEVEL above so the two extra levels
+     are reachable rather than decorative. */
+  ROLLER_GROWTH: 3.0,
+  AUTO_BASE: 2.0,
+  AUTO_GROWTH: 1.35,
+
+  UNIT_BASE: 5000,
+  UNIT_GROWTH: 12,
+
+  COMBO_MULT: 3,
+  COMBO_PAIR_MULT: 2,
+  /* A die below this size cannot form a match. Below the floor a match is so
+     likely that growing a die would LOWER expected income (two one-sided dice
+     match on every throw), which is exactly the trap invariant 1 forbids.
+
+     Spec value 4. Raised after walking the shapes a player can actually reach.
+     A multiplicative combo cannot be made perfectly monotonic by any floor:
+     growing the smaller of two level dice thins the match it was part of. At 4
+     the damage was not a rounding error - 34 reachable shapes lose EV on the
+     forced + SIDE, the worst by 3.9%, and from 20/4/4 (reached by buying die 3
+     while die 2 is still small) income stays BELOW its starting level for nine
+     consecutive presses, troughing 8.9%. That is the only button in the shop
+     making the coin counter go backwards for minutes at a time.
+     At 6: 15 reachable losing shapes, worst 1.8%, deepest run 3.0% over five
+     presses - and the specific trap, a big die beside two small ones, is gone
+     because dice under 6 sit the combo out entirely. Going further (8 -> 0.7%
+     over one press) buys little and deletes the combo from the early part of
+     every run, including the whole replay after each Recast.
+     sim.js asserts both bounds over the reachable set. SPEC.md section 4. */
+  COMBO_MIN_SIDES: 6,
+
+  RECAST_AT: 250000,
+  SHARD_COEF: 12,
+  SHARD_EXP: 0.45,
+  SHARD_VALUE: 0.15,
+
+  UNLOCK_SIDE_COINS: 6,
+  UNLOCK_ROLLER_SIDES: 6,
+  UNLOCK_UNIT_SIDES: 10,
+
+  OFFLINE_MIN_S: 60,
+  OFFLINE_RATE: 0.5,
+  OFFLINE_CAP_S: 14400,
+  OFFLINE_RATE_AD: 1.0,
+  OFFLINE_CAP_AD_S: 28800,
+
+  HOT_MULT: 3,
+  HOT_DURATION_S: 120,
+  HOT_COOLDOWN_S: 1200,
+  ADS_RETURN_GATE_S: 1800,
+
+  TAP_COOLDOWN_S: 0.1,
+  FAST_ROLL_THRESHOLD: 8
+};
+
+/* ---- ladders ------------------------------------------------------------ */
+
+/* V(n) = ceil(1.55^(n-1)). The epsilon keeps float dust from pushing an exact
+   power over the next integer. */
+function faceValue(n) {
+  return Math.ceil(Math.pow(K.FACE_GROWTH, n - 1) - 1e-9);
+}
+
+function faceValues(count) {
+  var out = [], i;
+  for (i = 1; i <= count; i++) out.push(faceValue(i));
+  return out;
+}
+
+function expectedFace(count) {
+  var sum = 0, i;
+  for (i = 1; i <= count; i++) sum = add(sum, faceValue(i));
+  return sum / count;
+}
+
+/* Cost of the n-th side of unit u (both 1-based). */
+function sideCost(unit, n) {
+  return Math.ceil(
+    K.SIDE_BASE *
+    Math.pow(K.SIDE_GROWTH, n - 2) *
+    Math.pow(K.SIDE_UNIT_MULT, unit - 1) - 1e-9);
+}
+
+/* Cost to go from roller level L to L+1. L = -1 means "not owned yet". */
+function rollerCost(level) {
+  return Math.ceil(K.ROLLER_BASE * Math.pow(K.ROLLER_GROWTH, level + 1) - 1e-9);
+}
+
+function autoRate(level) {
+  return level < 0 ? 0 : K.AUTO_BASE * Math.pow(K.AUTO_GROWTH, level);
+}
+
+/* Cost of the next unit when `owned` are already owned. */
+function unitCost(owned) {
+  return K.UNIT_BASE * Math.pow(K.UNIT_GROWTH, owned - 1);
+}
+
+function shardsFor(st) {
+  var threshold = recastThreshold(st);
+  if (st.runCoins < threshold) return 0;
+  return Math.floor(K.SHARD_COEF * Math.pow(st.runCoins / threshold, K.SHARD_EXP));
+}
+
+/* The bar a run has to clear scales with the multiplier you already own.
+   Without this, coins earned this run include M, so a big M would hand you
+   another full shard payout for no new progress and Recast would become a
+   button you mash. Measuring the run against M keeps "10x the wait pays 2.8x
+   the shards" true and leaves every printed constant alone. */
+function recastThreshold(st) { return K.RECAST_AT * globalMult(st.shards); }
+
+function globalMult(shards) { return 1 + K.SHARD_VALUE * shards; }
+
+/* ---- combo and expected value -------------------------------------------
+   The combo is one evaluator over the landed-index array - a single payline,
+   which is what makes the slot reskin a data change rather than a rewrite.
+   Two matching faces pay x2, every face matching pays x3. With two dice those
+   are the same event, so two dice behave exactly as the spec describes; the
+   pair tier only exists so that adding a third die can never cost you income.
+   Dice below COMBO_MIN_SIDES sit the combo out entirely.                   */
+
+function participants(counts) {
+  var p = [], d;
+  for (d = 0; d < counts.length; d++) if (counts[d] >= K.COMBO_MIN_SIDES) p.push(d);
+  return p;
+}
+
+function comboFor(counts, indices) {
+  var p = participants(counts), a, b;
+  if (p.length < 2) return 1;
+  var allEqual = true;
+  for (a = 1; a < p.length; a++) if (indices[p[a]] !== indices[p[0]]) allEqual = false;
+  if (allEqual) return K.COMBO_MULT;
+  for (a = 0; a < p.length; a++) {
+    for (b = a + 1; b < p.length; b++) if (indices[p[a]] === indices[p[b]]) return K.COMBO_PAIR_MULT;
+  }
+  return 1;
+}
+
+/* Which dice actually formed the match, so the renderer can glow exactly those
+   and leave the non-participants alone. Returns null when nothing matched. */
+function matchedSet(counts, indices) {
+  var p = participants(counts), a, b, out = [];
+  if (p.length < 2) return null;
+  for (a = 0; a < p.length; a++) {
+    for (b = a + 1; b < p.length; b++) {
+      if (indices[p[a]] !== indices[p[b]]) continue;
+      if (out.indexOf(p[a]) < 0) out.push(p[a]);
+      if (out.indexOf(p[b]) < 0) out.push(p[b]);
+    }
+  }
+  return out.length ? out : null;
+}
+
+/* E[ whole payout . 1{every die in `set` lands the same index} ]. Exact, and
+   the only place expected value is ever computed. No Monte Carlo anywhere. */
+function setMatchEV(counts, set) {
+  var minS = Infinity, prod = 1, outside = 0, i, d;
+  for (i = 0; i < set.length; i++) { minS = Math.min(minS, counts[set[i]]); prod *= counts[set[i]]; }
+  for (d = 0; d < counts.length; d++) if (set.indexOf(d) < 0) outside = add(outside, expectedFace(counts[d]));
+  var total = 0;
+  for (i = 0; i < minS; i++) total = add(total, set.length * faceValue(i + 1) + outside);
+  return total / prod;
+}
+
+function expectedPayout(counts) {
+  var base = 0, d;
+  for (d = 0; d < counts.length; d++) base = add(base, expectedFace(counts[d]));
+  var p = participants(counts);
+  if (p.length < 2) return base;
+  if (p.length === 2) return add(base, (K.COMBO_MULT - 1) * setMatchEV(counts, p));
+  /* three participants: mult-1 = (pairs that match) - (all three match) */
+  var bonus = 0, a, b;
+  for (a = 0; a < p.length; a++) {
+    for (b = a + 1; b < p.length; b++) bonus = add(bonus, setMatchEV(counts, [p[a], p[b]]));
+  }
+  return add(base, sub(bonus, setMatchEV(counts, p)));
+}
+
+/* Share of expected income that comes from the combo bonus (invariant 4). */
+function comboShare(counts) {
+  var base = 0, d;
+  for (d = 0; d < counts.length; d++) base = add(base, expectedFace(counts[d]));
+  var total = expectedPayout(counts);
+  return total > 0 ? (total - base) / total : 0;
+}
+
+/* Highest payout a single throw can produce, multipliers excluded. Brute force
+   over at most 20^3 outcomes, memoised; exactness matters more than speed on a
+   readout the player reads as a promise. */
+var maxRollCache = {};
+
+function maxRoll(counts) {
+  var key = counts.join(',');
+  if (maxRollCache[key] !== undefined) return maxRollCache[key];
+  var best = 0;
+  var cur = counts.map(function () { return 0; });
+  (function walk(d) {
+    if (d === counts.length) {
+      var sum = 0, i;
+      for (i = 0; i < counts.length; i++) sum = add(sum, faceValue(cur[i] + 1));
+      var v = mul(sum, comboFor(counts, cur));
+      if (v > best) best = v;
+      return;
+    }
+    for (var i = 0; i < counts[d]; i++) { cur[d] = i; walk(d + 1); }
+  })(0);
+  maxRollCache[key] = best;
+  return best;
+}
+
+/* ---- state -------------------------------------------------------------- */
+
+function newState() {
+  return {
+    v: K.SAVE_VERSION,
+    coins: 0,
+    runCoins: 0,      // earned since the last recast, drives shards
+    lifetime: 0,      // earned ever, drives the first unlock
+    units: [1],       // side count per unit
+    slots: 1,
+    roller: -1,
+    shards: 0,
+    recasts: 0,
+    throws: 0,
+    muted: false,
+    adsUnlocked: false,
+    hotUntil: 0,      // absolute wall time, Date.now() MILLISECONDS, not seconds
+    hotReadyAt: 0,    // absolute wall time, Date.now() milliseconds
+    pending: null,    // { txId, kind, payload } written BEFORE any ad call
+    /* An offline claim the player has not collected yet. It lives in the save
+       rather than in memory because every save advances savedAt, so a claim held
+       only in memory was destroyed by the next background/foreground cycle. */
+    pendingOffline: 0,
+    pendingOfflineSeconds: 0,
+    savedAt: 0
+  };
+}
+
+function clone(st) { return JSON.parse(JSON.stringify(st)); }
+
+/* `nowMs` is Date.now() MILLISECONDS, because that is what hotUntil is stored
+   in. It used to be called nowS, which invited a caller to pass a seconds-based
+   clock; any seconds value is below hotUntil for the next fifty thousand years,
+   which would hand out a permanent x3. */
+function multiplier(st, nowMs) {
+  var m = globalMult(st.shards);
+  if (nowMs < st.hotUntil) m *= K.HOT_MULT;
+  return m;
+}
+
+/* The unit that +SIDE targets: fewest sides, lowest index breaks the tie.
+   The player never chooses, so this is the only targeting rule in the game. */
+function sideTarget(st) {
+  var best = -1, i;
+  for (i = 0; i < st.units.length; i++) {
+    if (st.units[i] >= K.MAX_SIDES) continue;
+    if (best < 0 || st.units[i] < st.units[best]) best = i;
+  }
+  if (best < 0) return null;
+  return { unit: best, n: st.units[best] + 1, cost: sideCost(best + 1, st.units[best] + 1) };
+}
+
+function unlocked(st, kind) {
+  if (kind === 'side') return st.lifetime >= K.UNLOCK_SIDE_COINS && sideTarget(st) !== null;
+  if (kind === 'roller') return st.units[0] >= K.UNLOCK_ROLLER_SIDES && st.roller < K.MAX_ROLLER_LEVEL;
+  /* The roller gate is not a price gate - it closes a trap. A player who saves
+     for the 5,000-coin die instead of the 600-coin roller keeps rolling by hand
+     while every +SIDE coin goes to a newborn die at 4x price.
+     Lv2, not "owned": requiring only L0 narrowed the trap without closing it.
+     Buying the minimum 10 sides, then L0 purely to satisfy the gate, then
+     banking for the die still measured the auto-roller at 13.5 min against a
+     4-minute target and the second die at 15.1 against 9 - 13 minutes of
+     thumb-mashing in a game whose own spec calls 2.0 rolls/s above comfortable
+     thumb speed. L0+L1+L2 costs 7,800 coins against the die's 5,000 and the
+     third die's 60,000, so it costs a normal player nothing: the reference bot
+     already owns Lv2 by 11 min and its milestones do not move. */
+  if (kind === 'unit') return st.units[0] >= K.UNLOCK_UNIT_SIDES && st.roller >= 2 && st.slots < K.MAX_DICE;
+  if (kind === 'recast') return st.recasts < K.MAX_RECASTS && st.runCoins >= recastThreshold(st);
+  return false;
+}
+
+function costOf(st, kind) {
+  if (kind === 'side') { var t = sideTarget(st); return t ? t.cost : Infinity; }
+  if (kind === 'roller') return st.roller < K.MAX_ROLLER_LEVEL ? rollerCost(st.roller) : Infinity;
+  if (kind === 'unit') return st.slots < K.MAX_DICE ? unitCost(st.slots) : Infinity;
+  return Infinity;
+}
+
+function canBuy(st, kind) {
+  return unlocked(st, kind) && kind !== 'recast' && gte(st.coins, costOf(st, kind));
+}
+
+/* Applies a purchase. `free` skips the coin check and is used only by the
+   income-preview helper below. Returns a small description or null. */
+function buy(st, kind, free) {
+  if (kind === 'recast') return null;
+  if (!unlocked(st, kind)) return null;
+  var cost = costOf(st, kind);
+  if (!free) {
+    if (!gte(st.coins, cost)) return null;
+    st.coins = sub(st.coins, cost);
+  }
+  if (kind === 'side') {
+    var t = sideTarget(st);
+    st.units[t.unit] += 1;
+    return { kind: 'side', unit: t.unit, n: t.n, cost: cost };
+  }
+  if (kind === 'roller') { st.roller += 1; return { kind: 'roller', level: st.roller, cost: cost }; }
+  if (kind === 'unit') { st.units.push(1); st.slots += 1; return { kind: 'unit', slots: st.slots, cost: cost }; }
+  return null;
+}
+
+function recast(st) {
+  var gained = shardsFor(st);
+  st.shards += gained;
+  st.recasts += 1;
+  st.coins = 0;
+  st.runCoins = 0;
+  st.roller = st.roller < 0 ? -1 : Math.floor(st.roller / 2);
+  var i;
+  for (i = 0; i < st.units.length; i++) st.units[i] = 1;
+  return gained;
+}
+
+/* ---- throwing ----------------------------------------------------------- */
+
+/* Resolves one throw and credits it. The renderer is handed this object and
+   only plays it back; it never decides an outcome. */
+function roll(st, rnd, nowMs) {
+  var indices = [], values = [], base = 0, d, i;
+  for (d = 0; d < st.units.length; d++) {
+    i = Math.floor(rnd() * st.units[d]);
+    if (i >= st.units[d]) i = st.units[d] - 1;
+    indices.push(i);
+    var v = faceValue(i + 1);
+    values.push(v);
+    base = add(base, v);
+  }
+  var combo = comboFor(st.units, indices);
+  var m = multiplier(st, nowMs);
+  var total = mul(mul(base, combo), m);
+  st.coins = add(st.coins, total);
+  st.runCoins = add(st.runCoins, total);
+  st.lifetime = add(st.lifetime, total);
+  st.throws += 1;
+  /* `combo` carries the whole meaning: COMBO_MULT is "every participating die
+     matched", COMBO_PAIR_MULT is "a pair matched", 1 is no match. There is
+     deliberately no raw all-indices-equal flag - dice below COMBO_MIN_SIDES sit
+     the combo out, so such a flag would read true on throws that pay nothing. */
+  return {
+    indices: indices, values: values, base: base,
+    combo: combo, mult: m, total: total
+  };
+}
+
+function throwRate(st, tapRate) { return autoRate(st.roller) + (tapRate || 0); }
+
+/* `nowMs` is Date.now() milliseconds, as in multiplier(). Passing 0 (as every
+   ROI and simulator caller does) deliberately asks for the un-buffed rate. */
+function income(st, tapRate, nowMs) {
+  return throwRate(st, tapRate) * expectedPayout(st.units) * multiplier(st, nowMs || 0);
+}
+
+/* Income the player would have right after a purchase, used for ROI ranking
+   and for the simulator's monotonic-income invariant. */
+function incomeAfter(st, kind, tapRate) {
+  var c = clone(st);
+  if (!buy(c, kind, true)) return -1;
+  return income(c, tapRate, 0);
+}
+
+/* ---- offline ------------------------------------------------------------ */
+
+function offlineEarnings(st, secondsAway, doubled) {
+  var cap = doubled ? K.OFFLINE_CAP_AD_S : K.OFFLINE_CAP_S;
+  var rate = doubled ? K.OFFLINE_RATE_AD : K.OFFLINE_RATE;
+  var s = Math.max(0, Math.min(secondsAway, cap));
+  return rate * autoRate(st.roller) * expectedPayout(st.units) * globalMult(st.shards) * s;
+}
+
+/* ---- formatting --------------------------------------------------------- */
+
+var SUFFIX = ['', 'K', 'M', 'B', 'T'];
+
+function tierName(tier) {
+  if (tier < SUFFIX.length) return SUFFIX[tier];
+  var i = tier - SUFFIX.length;
+  return String.fromCharCode(97 + Math.floor(i / 26)) + String.fromCharCode(97 + (i % 26));
+}
+
+function fmt(x) {
+  if (!isFinite(x)) return '∞';
+  var n = Math.floor(x);
+  if (n < 10000) return String(n);
+  var tier = Math.floor(Math.log10(n) / 3);
+  var m = n / Math.pow(1000, tier);
+  if (m >= 1000) { tier += 1; m = n / Math.pow(1000, tier); }
+  return m.toFixed(2) + tierName(tier);
+}
+
+function fmtTime(seconds) {
+  var s = Math.max(0, Math.round(seconds));
+  var h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60);
+  if (h > 0) return h + 'h ' + m + 'm';
+  if (m > 0) return m + 'm ' + (s % 60) + 's';
+  return s + 's';
+}
+
+global.ECON = {
+  K: K,
+  add: add, sub: sub, mul: mul, cmp: cmp, gte: gte,
+  faceValue: faceValue, faceValues: faceValues, expectedFace: expectedFace,
+  sideCost: sideCost, rollerCost: rollerCost, autoRate: autoRate, unitCost: unitCost,
+  shardsFor: shardsFor, globalMult: globalMult, recastThreshold: recastThreshold,
+  expectedPayout: expectedPayout, comboShare: comboShare, maxRoll: maxRoll,
+  comboFor: comboFor, participants: participants, matchedSet: matchedSet,
+  newState: newState, clone: clone, multiplier: multiplier,
+  sideTarget: sideTarget, unlocked: unlocked, costOf: costOf, canBuy: canBuy,
+  buy: buy, recast: recast, roll: roll,
+  throwRate: throwRate, income: income, incomeAfter: incomeAfter,
+  offlineEarnings: offlineEarnings,
+  fmt: fmt, fmtTime: fmtTime
+};
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+</script>
+
+<script id="game">
+/* ============================================================================
+   GAME. Input, rendering, audio, storage, ads. Every number comes from ECON.
+   ========================================================================== */
+(function () {
+'use strict';
+
+var E = globalThis.ECON;
+var DEV = /(\?|&)dev=1(&|$)/.test(location.search);
+
+/* ---- theme seam ---------------------------------------------------------
+   Everything the player sees passes through THEME. A slot reskin replaces
+   drawUnit + strings + sounds and touches no economy code. See README. */
+var THEME = {
+  id: 'dice',
+  strings: {
+    addSide: '+ SIDE',
+    roller: 'ROLLER',
+    addUnit: '+ DIE',
+    recast: 'RECAST',
+    readout: 'MAX ROLL',
+    sideSub: function (n) { return 'GROW TO ' + n + ' SIDES'; },
+    rollerSub: function (rate) { return rate.toFixed(2) + ' ROLLS/SEC'; },
+    unitSub: function (n) { return 'A ' + (n === 2 ? 'SECOND' : 'THIRD') + ' DIE, ONE SIDE'; },
+    recastSub: 'MELT DOWN, KEEP THE SHARDS',
+    recastDone: 'ALL THREE RUNS DONE',
+    lockedSide: 'ROLL TO UNLOCK',
+    lockedRoller: 'AT 6 SIDES',
+    lockedUnit: 'AT 10 SIDES',
+    /* the + DIE roller precondition is three roller purchases, not merely one */
+    lockedUnitRoller: 'AFTER 3 ROLLER LEVELS',
+    hot: 'HOT HAND'
+  },
+  palette: {
+    bg: '#16181c', body: '#ece7dc', edge: '#f0a830', gold: '#ffcf5c',
+    cyan: '#57d6e0', dim: '#5a6068', ground: '#2c3038', shadow: '#0e1013'
+  },
+  faceLabel: function (index) { return String(E.faceValue(index + 1)); },
+  drawUnit: drawDie,
+  sounds: { roll: 'roll', land: 'land', buy: 'buy', grow: 'grow' }
+};
+
+/* ---- state -------------------------------------------------------------- */
+
+var st = E.newState();
+
+/* One clock for everything time-gated. It has to be the wall clock, not a
+   total of frame deltas: the render loop deliberately stops when nothing is
+   moving, and a clock that stops with it would freeze the buy lockout, the
+   tap cooldown and the Hot Hand timer along with it. */
+function clock() { return performance.now() / 1000; }
+
+var G = {
+  raf: 0,
+  last: 0,
+  now: 0,            // clock() as of the current frame, for the renderer
+  autoAcc: 0,
+  tapGuard: 0,
+  freezeUntil: 0,    // hard UI freeze during the add-a-side morph
+  shownCoins: 0,
+  maxRollShown: 1,
+  maxRollTarget: 1,
+  maxRollTick: 0,
+  shake: 0,
+  floats: [],
+  floatBudget: 0,
+  anims: [],         // per-unit animation slots
+  morph: null,
+  fastMode: false,
+  lastResult: null,
+  pendingLand: null, // resolved roll whose payout feedback has not played yet
+  hintGone: false,
+  panelOpen: false,
+  dirty: false,
+  saveHandle: 0
+};
+
+/* One teardown for both a Recast and a hard reset. doRecast used to leave
+   pendingLand, lastResult and freezeUntil set, so a throw resolved just before
+   the confirm could spawn its "+4.21M" float over a one-sided die on a zeroed
+   counter; hardReset left even more behind, including a freeze that swallowed
+   the first 0.7 s of taps on a brand-new game. */
+function resetVisualState() {
+  G.morph = null;
+  G.pendingLand = null;
+  G.lastResult = null;
+  G.anims.length = 0;
+  G.floats.length = 0;
+  G.freezeUntil = 0;
+  G.shake = 0;
+  G.maxRollTick = 0;
+  G.autoAcc = 0;
+  G.floatBudget = 0;
+}
+
+function unitAnim(i) {
+  while (G.anims.length <= i) {
+    G.anims.push({ rot: 0, from: 0, to: 0, t: 1, dur: 0.38, index: 0, flash: 0, squash: 0 });
+  }
+  return G.anims[i];
+}
+
+/* ---- storage -------------------------------------------------------------
+   Capacitor Preferences when the wrapper is present, localStorage in the
+   browser, plain memory if both throw (private mode, blocked site data). */
+var Store = (function () {
+  var mem = {};
+  var cap = null;
+  try {
+    if (globalThis.Capacitor && globalThis.Capacitor.Plugins && globalThis.Capacitor.Plugins.Preferences) {
+      cap = globalThis.Capacitor.Plugins.Preferences;
+    }
+  } catch (e) { cap = null; }
+  function local(k) {
+    try { var v = localStorage.getItem(k); if (v !== null) return v; } catch (e) {}
+    return Object.prototype.hasOwnProperty.call(mem, k) ? mem[k] : null;
+  }
+  return {
+    get: local,
+    /* Preferences (SharedPreferences on Android) is the durable copy: WebView
+       localStorage is wiped by "clear storage" and by some OEM cleaners. Read it
+       first, fall back to the mirror, and migrate an existing browser save into
+       Preferences the first time the wrapper sees it. */
+    getAsync: function (k) {
+      if (!cap) return Promise.resolve(local(k));
+      return Promise.resolve()
+        .then(function () { return cap.get({ key: k }); })
+        .then(function (res) {
+          var v = res && res.value != null ? res.value : null;
+          if (v !== null) return v;
+          var mirror = local(k);
+          if (mirror !== null) { try { cap.set({ key: k, value: mirror }); } catch (e) {} }
+          return mirror;
+        })
+        .catch(function () { return local(k); });
+    },
+    set: function (k, v) {
+      mem[k] = v;
+      try { localStorage.setItem(k, v); } catch (e) {}
+      if (cap) { try { cap.set({ key: k, value: v }); } catch (e) {} }
+    },
+    remove: function (k) {
+      delete mem[k];
+      try { localStorage.removeItem(k); } catch (e) {}
+      if (cap) { try { cap.remove({ key: k }); } catch (e) {} }
+    }
+  };
+})();
+
+function save() {
+  st.savedAt = Date.now();
+  try { Store.set(E.K.SAVE_KEY, JSON.stringify(st)); } catch (e) {}
+  G.dirty = false;
+  if (G.saveHandle) { clearTimeout(G.saveHandle); G.saveHandle = 0; }
+}
+
+function markDirty() {
+  G.dirty = true;
+  /* The debounce cannot live on the rAF loop: before the roller is bought the
+     loop stops a moment after the last tap, so the 5 s timer was reset by the
+     next wake() long before it ever fired. */
+  if (!G.saveHandle) {
+    G.saveHandle = setTimeout(function () {
+      G.saveHandle = 0;
+      if (G.dirty) save();
+    }, 5000);
+  }
+}
+
+function num(v, fallback) {
+  var n = +v;
+  return isFinite(n) ? n : fallback;
+}
+
+function clampInt(v, lo, hi, fallback) {
+  var n = Math.floor(num(v, NaN));
+  if (!isFinite(n)) return fallback;
+  return Math.min(hi, Math.max(lo, n));
+}
+
+/* localStorage is player-editable in a browser and in a debuggable WebView, and
+   a half-flushed write looks the same. Anything that gets past the version check
+   is coerced and clamped, because one NaN in `coins` makes every purchase
+   impossible forever and an empty `units` leaves a game with no dice at all. */
+function sanitise(data) {
+  var K = E.K;
+  var fresh = E.newState();
+  var k;
+  for (k in fresh) if (Object.prototype.hasOwnProperty.call(data, k)) fresh[k] = data[k];
+
+  var units = (Array.isArray(data.units) ? data.units : []).slice(0, K.MAX_DICE)
+    .map(function (s) { return clampInt(s, 1, K.MAX_SIDES, 1); });
+  if (!units.length) units = [1];
+  fresh.units = units;
+
+  fresh.coins = Math.max(0, num(fresh.coins, 0));
+  fresh.runCoins = Math.max(0, num(fresh.runCoins, 0));
+  fresh.lifetime = Math.max(fresh.runCoins, num(fresh.lifetime, 0));
+  fresh.shards = Math.max(0, clampInt(fresh.shards, 0, 1e9, 0));
+  fresh.recasts = clampInt(fresh.recasts, 0, K.MAX_RECASTS, 0);
+  fresh.throws = Math.max(0, num(fresh.throws, 0));
+  fresh.roller = clampInt(fresh.roller, -1, K.MAX_ROLLER_LEVEL, -1);
+  /* slots and dice are bought together and a Recast changes neither, so they are
+     always equal. Trusting a saved `slots` that disagrees strands the player:
+     slots=3 with one die leaves +DIE locked for good. */
+  fresh.slots = units.length;
+  fresh.muted = !!fresh.muted;
+  fresh.adsUnlocked = !!fresh.adsUnlocked;
+  fresh.savedAt = Math.max(0, num(fresh.savedAt, 0));
+  fresh.pendingOffline = Math.max(0, num(fresh.pendingOffline, 0));
+  fresh.pendingOfflineSeconds = Math.max(0, num(fresh.pendingOfflineSeconds, 0));
+  if (fresh.pending && typeof fresh.pending === 'object' && fresh.pending.txId) {
+    fresh.pending = { txId: String(fresh.pending.txId), kind: String(fresh.pending.kind || ''), payload: fresh.pending.payload || {} };
+  } else {
+    fresh.pending = null;
+  }
+
+  /* Buff clocks are absolute wall time so a reload cannot hand out a free Hot
+     Hand. A live buff is clamped to its full length (forward clock jump) and a
+     cooldown further away than its own length is treated as finished
+     (backwards clock jump), so neither direction can be farmed. */
+  var now = Date.now();
+  fresh.hotUntil = Math.min(Math.max(0, num(fresh.hotUntil, 0)), now + K.HOT_DURATION_S * 1000);
+  fresh.hotReadyAt = Math.max(0, num(fresh.hotReadyAt, 0));
+  if (fresh.hotReadyAt - now > K.HOT_COOLDOWN_S * 1000) fresh.hotReadyAt = 0;
+  return fresh;
+}
+
+function applyLoaded(raw) {
+  if (!raw) return 0;
+  var data;
+  try { data = JSON.parse(raw); } catch (e) { return 0; }
+  if (!data || data.v !== E.K.SAVE_VERSION || !Array.isArray(data.units)) return 0;
+  st = sanitise(data);
+  var away = st.savedAt ? (Date.now() - st.savedAt) / 1000 : 0;
+  return Math.max(0, away);
+}
+
+function loadAsync() {
+  return Store.getAsync(E.K.SAVE_KEY).then(applyLoaded, function () { return 0; });
+}
+
+/* ---- audio ---------------------------------------------------------------
+   Four blips synthesised in code. No files, no decoding, no latency. */
+var Audio2 = (function () {
+  var ctx = null;
+  function ensure() {
+    if (ctx) return ctx;
+    var AC = globalThis.AudioContext || globalThis.webkitAudioContext;
+    if (!AC) return null;
+    try { ctx = new AC(); } catch (e) { ctx = null; }
+    return ctx;
+  }
+  function blip(type, freq, dur, gain, sweepTo) {
+    if (st.muted) return;
+    var c = ensure();
+    if (!c || c.state === 'suspended') { if (c) c.resume(); }
+    if (!c) return;
+    var t = c.currentTime;
+    var o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(freq, t);
+    if (sweepTo) o.frequency.exponentialRampToValueAtTime(sweepTo, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(gain, t + 0.008);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(c.destination);
+    o.start(t); o.stop(t + dur + 0.02);
+  }
+  return {
+    unlock: function () { var c = ensure(); if (c && c.state === 'suspended') c.resume(); },
+    play: function (name, value) {
+      if (name === 'roll') blip('triangle', 210, 0.05, 0.05);
+      else if (name === 'land') {
+        var f = 330 + Math.min(520, Math.log10(Math.max(1, value || 1)) * 130);
+        blip('square', f, 0.07, 0.045);
+      } else if (name === 'buy') blip('sine', 680, 0.1, 0.07, 980);
+      else if (name === 'grow') { blip('sine', 88, 0.22, 0.14); blip('sine', 520, 0.34, 0.08, 1080); }
+    }
+  };
+})();
+
+function buzz(ms) { try { if (navigator.vibrate) navigator.vibrate(ms); } catch (e) {} }
+
+/* ---- ads -----------------------------------------------------------------
+   One stub, one rule: the pending-reward record is written to the save BEFORE
+   the SDK is called, and the reward is granted on success, failure, timeout
+   or a resume that finds the record. A failed ad never costs the player. */
+var Ads = {
+  forceFail: false,
+  showRewarded: function (placement) {
+    var overlay = $('#adOverlay'), fill = $('#adBarFill'), title = $('#adTitle');
+    title.textContent = placement;
+    overlay.classList.add('show');
+    fill.style.transition = 'none';
+    fill.style.width = '0%';
+    return new Promise(function (resolve, reject) {
+      requestAnimationFrame(function () {
+        fill.style.transition = 'width 1000ms linear';
+        fill.style.width = '100%';
+      });
+      setTimeout(function () {
+        overlay.classList.remove('show');
+        if (Ads.forceFail) reject(new Error('no-fill')); else resolve();
+      }, 1000);
+    });
+  }
+};
+
+function withTimeout(promise, ms) {
+  return new Promise(function (resolve, reject) {
+    var done = false;
+    var t = setTimeout(function () { if (!done) { done = true; reject(new Error('timeout')); } }, ms);
+    promise.then(function (v) { if (!done) { done = true; clearTimeout(t); resolve(v); } },
+                 function (e) { if (!done) { done = true; clearTimeout(t); reject(e); } });
+  });
+}
+
+function grantReward(txId, fn) {
+  if (!st.pending || st.pending.txId !== txId) return;   // idempotent by txId
+  var payload = st.pending.payload;
+  st.pending = null;
+  fn(payload);
+  save();
+}
+
+function runRewarded(placement, payload, fn) {
+  var txId = 'tx' + Date.now() + '-' + Math.floor(Math.random() * 1e6);
+  st.pending = { txId: txId, kind: placement, payload: payload };
+  save();                                   // record first, always
+  withTimeout(Ads.showRewarded(placement), 6000)
+    .then(function () { grantReward(txId, fn); })
+    .catch(function () { grantReward(txId, fn); });
+}
+
+function resumePendingReward() {
+  if (!st.pending) return;
+  var p = st.pending;
+  if (p.kind === 'OFFLINE DOUBLE') grantReward(p.txId, applyOfflineDouble);
+  else if (p.kind === 'HOT HAND') grantReward(p.txId, startHot);
+  else st.pending = null;
+}
+
+/* ---- dom helpers -------------------------------------------------------- */
+
+function $(sel) { return document.querySelector(sel); }
+function el(tag, cls, html) {
+  var n = document.createElement(tag);
+  if (cls) n.className = cls;
+  if (html != null) n.innerHTML = html;
+  return n;
+}
+
+/* ---- geometry -----------------------------------------------------------
+   Canvas coordinates, y down. Angle PI/2 points at the ground, so the resting
+   edge of every shape is the edge whose outward normal sits at PI/2. */
+var BOTTOM = Math.PI / 2;
+
+function radiusFor(sides, units) {
+  var r = Math.min(140, 96 + 2.2 * Math.min(sides, E.K.MAX_SIDES));
+  if (units === 2) r *= 0.72;
+  else if (units >= 3) r *= 0.58;
+  return r;
+}
+
+/* Distance from the shape's centre down to the ground contact when it is at
+   rest on a flat. */
+function contactDepth(sides, R) {
+  if (sides <= 1) return R * 0.8;
+  if (sides === 2) return R * 0.45;
+  return R * Math.cos(Math.PI / sides);
+}
+
+/* Unit outlines cached once so the per-frame ground test is a loop over a
+   handful of points rather than a rebuild. */
+var unitOutlines = {};
+
+function unitOutline(sides) {
+  if (!unitOutlines[sides]) unitOutlines[sides] = outline(sides, 1);
+  return unitOutlines[sides];
+}
+
+/* How far the lowest point of the shape sits below its centre at rotation
+   `rot`. Placing the centre this far above the ground line means a spinning
+   die rides on the line instead of cutting through it, and settles perfectly
+   flat the moment it lands. */
+function contactDepthAt(sides, R, rot) {
+  if (Math.abs(rot % (2 * Math.PI)) < 1e-6) return contactDepth(sides, R);
+  var lowest = 0, k, a, pts, p;
+  if (sides >= 3) {
+    for (k = 0; k < sides; k++) {
+      a = BOTTOM + Math.PI / sides + k * (2 * Math.PI / sides) + rot;
+      if (Math.sin(a) > lowest) lowest = Math.sin(a);
+    }
+    return lowest * R;
+  }
+  pts = unitOutline(sides);
+  var c = Math.cos(rot), s = Math.sin(rot);
+  for (k = 0; k < pts.length; k++) {
+    p = pts[k][0] * s + pts[k][1] * c;
+    if (p > lowest) lowest = p;
+  }
+  return lowest * R;
+}
+
+function edgeAngle(sides, index, rot) {
+  if (sides <= 1) return BOTTOM + rot;
+  return BOTTOM + index * (2 * Math.PI / sides) + rot;
+}
+
+/* Rotation that brings edge `index` to the ground. */
+function rotationFor(sides, index) {
+  if (sides <= 1) return 0;
+  return -index * (2 * Math.PI / sides);
+}
+
+function polyPoints(sides, R, rot) {
+  var pts = [], k, a;
+  for (k = 0; k < sides; k++) {
+    a = BOTTOM + Math.PI / sides + k * (2 * Math.PI / sides) + rot;
+    pts.push([Math.cos(a) * R, Math.sin(a) * R]);
+  }
+  return pts;
+}
+
+/* Dense outline for any side count, starting at the ground contact point and
+   walking the same direction every time so morph samples line up. */
+function outline(sides, R) {
+  var pts = [], i, a;
+  if (sides <= 1) {
+    var cut = 0.8;                               // circle with one flat spot
+    var half = Math.acos(cut);
+    var start = BOTTOM - half, end = BOTTOM + half;
+    pts.push([0, R * cut]);
+    for (i = 0; i <= 96; i++) {
+      a = end + (2 * Math.PI - (end - start)) * (i / 96);
+      pts.push([Math.cos(a) * R, Math.sin(a) * R]);
+    }
+    return pts;
+  }
+  if (sides === 2) {
+    var h = R * 0.45;                            // lens: two arcs, flips end over end
+    var r = (R * R + h * h) / (2 * h);
+    var span = Math.asin(R / r);
+    /* Same start point and same winding as every other outline: begin at the
+       ground contact, walk to the LEFT tip, over the top, to the right tip and
+       back. Emitting the two arcs left-to-right each (as this used to) made a
+       bowtie point order, so the 1->2 and 2->3 morphs - the first thing a new
+       player sees, at 0:10 - lerped through a self-intersecting shear instead
+       of a squash-and-split. */
+    var lower = function (u) {                   // u = 0 left tip, 1 right tip
+      var t = Math.PI / 2 + span - 2 * span * u;
+      return [r * Math.cos(t), -(r - h) + Math.sin(t) * r];
+    };
+    var upper = function (u) {                   // u = 0 left tip, 1 right tip
+      var t = -Math.PI / 2 - span + 2 * span * u;
+      return [r * Math.cos(t), (r - h) + Math.sin(t) * r];
+    };
+    for (i = 32; i >= 0; i--) pts.push(lower(i / 64));    // contact -> left tip
+    for (i = 1; i <= 64; i++) pts.push(upper(i / 64));    // left tip -> top -> right tip
+    for (i = 63; i >= 32; i--) pts.push(lower(i / 64));   // right tip -> contact
+    return pts;
+  }
+  var v = polyPoints(sides, R, 0);
+  pts.push([0, contactDepth(sides, R)]);         // ground contact, mid of edge 0
+  for (i = 0; i < sides; i++) pts.push(v[i]);
+  pts.push([0, contactDepth(sides, R)]);
+  return pts;
+}
+
+function resample(poly, count) {
+  var i, segs = [], total = 0;
+  for (i = 0; i < poly.length - 1; i++) {
+    var dx = poly[i + 1][0] - poly[i][0], dy = poly[i + 1][1] - poly[i][1];
+    var len = Math.hypot(dx, dy);
+    segs.push(len); total += len;
+  }
+  var out = [], target, acc = 0, seg = 0;
+  for (i = 0; i < count; i++) {
+    target = total * (i / count);
+    while (seg < segs.length - 1 && acc + segs[seg] < target) { acc += segs[seg]; seg++; }
+    var t = segs[seg] > 0 ? (target - acc) / segs[seg] : 0;
+    out.push([
+      poly[seg][0] + (poly[seg + 1][0] - poly[seg][0]) * t,
+      poly[seg][1] + (poly[seg + 1][1] - poly[seg][1]) * t
+    ]);
+  }
+  return out;
+}
+
+function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
+function easeOutBack(t) { var c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+
+/* ---- canvas -------------------------------------------------------------- */
+
+var cv = $('#stage'), cx = cv.getContext('2d');
+var CW = 360, CH = 350, DPR = 1;
+var lastCW = 0, lastCH = 0, lastDPR = 0;
+
+/* Measures the ELEMENT, not the window. Every shop card that slides in takes
+   72 px off #stageWrap without firing a resize event, and the backing store
+   stayed at whatever it was when start() ran, so #stage's inset:0/height:100%
+   box stretched a 602-tall bitmap into a 322-tall one - the polygons read as
+   flattened ellipses from the first purchase onward. A ResizeObserver in
+   start() drives this; the early return keeps calling it every frame free.
+   The old Math.max(200, ...) floor caused the same distortion permanently on
+   any viewport under ~618 px, so CH now follows the box. */
+function sizeCanvas() {
+  var rect = cv.getBoundingClientRect();
+  var dpr = Math.min(2.5, globalThis.devicePixelRatio || 1);
+  var w = Math.max(1, rect.width), h = Math.max(1, rect.height);
+  if (w === lastCW && h === lastCH && dpr === lastDPR) return;
+  lastCW = w; lastCH = h; lastDPR = dpr;
+  CW = w; CH = h; DPR = dpr;
+  cv.width = Math.round(CW * DPR);
+  cv.height = Math.round(CH * DPR);
+  cx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  wake();
+}
+
+function groundY() { return CH * 0.84; }
+
+/* One scale factor keeps every die inside the canvas at any width. */
+function fitScale(units) {
+  var maxR = 0, i;
+  for (i = 0; i < units.length; i++) maxR = Math.max(maxR, radiusFor(units[i], units.length));
+  var wNeed = units.length * maxR * 2.3;
+  var hNeed = maxR * 2.05;
+  /* the lower clamp only bites on a degenerate box (a canvas a few pixels tall
+     while the page is laying out), where an unclamped value would go negative */
+  return Math.max(0.05, Math.min(1, (CW * 0.94) / wNeed, (groundY() - 8) / hNeed));
+}
+
+/* One slot per die of exactly the width fitScale reserved, die centred in its
+   slot. Spacing the centres CW/(count+1) apart instead packed them tighter than
+   the width the scale was solved for, so at 360 px two dice overlapped by ~27 px
+   and three by ~8 px on every phone. */
+function unitX(i, count) {
+  return CW * 0.03 + (i + 0.5) * (CW * 0.94 / count);
+}
+
+/* ---- die drawing --------------------------------------------------------- */
+
+function roundedPolyPath(ctx, pts, radius) {
+  var n = pts.length, i;
+  ctx.beginPath();
+  for (i = 0; i < n; i++) {
+    var p0 = pts[(i - 1 + n) % n], p1 = pts[i], p2 = pts[(i + 1) % n];
+    var d1 = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]);
+    var d2 = Math.hypot(p2[0] - p1[0], p2[1] - p1[1]);
+    var r = Math.min(radius, d1 / 2, d2 / 2);
+    var a = [p1[0] + (p0[0] - p1[0]) * (r / d1), p1[1] + (p0[1] - p1[1]) * (r / d1)];
+    var b = [p1[0] + (p2[0] - p1[0]) * (r / d2), p1[1] + (p2[1] - p1[1]) * (r / d2)];
+    if (i === 0) ctx.moveTo(a[0], a[1]); else ctx.lineTo(a[0], a[1]);
+    ctx.quadraticCurveTo(p1[0], p1[1], b[0], b[1]);
+  }
+  ctx.closePath();
+}
+
+function shapePath(ctx, sides, R, rot) {
+  if (sides >= 3) {
+    roundedPolyPath(ctx, polyPoints(sides, R, rot), 2 + sides * 0.35);
+    return;
+  }
+  var pts = outline(sides, R), i;
+  ctx.save();
+  ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+  ctx.restore();
+}
+
+function pointsPath(ctx, pts) {
+  var i;
+  ctx.beginPath();
+  ctx.moveTo(pts[0][0], pts[0][1]);
+  for (i = 1; i < pts.length; i++) ctx.lineTo(pts[i][0], pts[i][1]);
+  ctx.closePath();
+}
+
+/* Which faces get a numeral. Past 13 edges only the four nearest the ground
+   are legible, so the rest become ticks and the value lives in the readout. */
+function labelledFaces(sides, rot, roomy) {
+  var all = [], i;
+  for (i = 0; i < sides; i++) all.push(i);
+  if (sides <= 13 && roomy) return all;
+  all.sort(function (a, b) {
+    return Math.abs(angleGap(edgeAngle(sides, a, rot))) - Math.abs(angleGap(edgeAngle(sides, b, rot)));
+  });
+  return all.slice(0, 4);
+}
+
+function angleGap(a) {
+  var d = (a - BOTTOM) % (2 * Math.PI);
+  if (d > Math.PI) d -= 2 * Math.PI;
+  if (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+function drawDie(ctx, unitIndex, opts) {
+  var sides = opts.sides;
+  var R = opts.R;
+  var rot = opts.rot;
+  var P = THEME.palette;
+
+  ctx.save();
+  ctx.translate(opts.x, opts.y);
+  ctx.scale(opts.sx, opts.sy);
+
+  if (opts.morphPts) pointsPath(ctx, opts.morphPts);
+  else shapePath(ctx, sides, R, rot);
+
+  ctx.fillStyle = P.body;
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = opts.flash > 0 ? '#ffffff' : '#c8c2b4';
+  ctx.stroke();
+
+  /* The + SIDE target pulses (SPEC.md section 3.2). The player never chooses
+     which die grows, so with two or three dice this outline is the only cue
+     they get - and after a Recast the tie-break moves the target from die to die
+     on almost every purchase. One extra stroke on the path already in hand, and
+     it lives in THEME so the slot reskin can replace it. */
+  if (opts.pulse) {
+    ctx.save();
+    ctx.globalAlpha = 0.25 + 0.25 * Math.sin(opts.time * 4);
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = P.gold;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  /* landed edge, amber, flashing white on the frame it lands */
+  if (sides >= 3 && !opts.morphPts) {
+    var v = polyPoints(sides, R, rot);
+    var idx = opts.landed;
+    var a = v[(idx - 1 + sides) % sides], b = v[idx % sides];
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]);
+    ctx.lineWidth = 5;
+    ctx.strokeStyle = opts.flash > 0 ? '#ffffff' : (opts.combo ? P.gold : P.edge);
+    ctx.stroke();
+  }
+
+  if (opts.labels) {
+    var edgeLen0 = sides >= 3 ? 2 * R * Math.sin(Math.PI / sides) : R;
+    var faces = labelledFaces(sides, rot, edgeLen0 * 0.42 >= 11), i;
+    ctx.fillStyle = '#23262b';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    var edgeLen = sides >= 3 ? 2 * R * Math.sin(Math.PI / sides) : R;
+    var fs = Math.max(9, Math.min(sides === 2 ? 26 : 34, edgeLen * (sides === 2 ? 0.3 : 0.42)));
+    /* in tick mode only four numerals survive and they all crowd the ground,
+       so push them out a little to keep them apart */
+    var labelR = sides === 2 ? 0.25 : sides === 1 ? 0.5 : 0.62;
+    if (faces.length < sides) {
+      for (i = 0; i < sides; i++) {
+        if (faces.indexOf(i) >= 0) continue;
+        var ta = edgeAngle(sides, i, rot);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(ta) * R * 0.74, Math.sin(ta) * R * 0.74);
+        ctx.lineTo(Math.cos(ta) * R * 0.84, Math.sin(ta) * R * 0.84);
+        ctx.lineWidth = 2;
+        ctx.strokeStyle = 'rgba(35,38,43,.45)';
+        ctx.stroke();
+      }
+    }
+    if (faces.length < sides) labelR = 0.7;
+    for (i = 0; i < faces.length; i++) {
+      var f = faces[i];
+      var ang = edgeAngle(sides, f, rot);
+      var px = Math.cos(ang) * R * labelR, py = Math.sin(ang) * R * labelR;
+      var rotText = ang - Math.PI / 2;
+      if (Math.cos(rotText) < 0) rotText += Math.PI;      // keep numerals readable
+      var pop = (opts.stampFace === f) ? opts.stampScale : 1;
+      ctx.save();
+      ctx.translate(px, py);
+      ctx.rotate(rotText);
+      ctx.scale(pop, pop);
+      ctx.globalAlpha = opts.labelAlpha;
+      ctx.font = '600 ' + fs.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
+      ctx.fillStyle = (f === opts.landed && !opts.morphPts) ? '#7a4a06' : '#23262b';
+      ctx.fillText(THEME.faceLabel(f), 0, 0);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
+/* ---- roll resolution ----------------------------------------------------- */
+
+function frozen() { return clock() < G.freezeUntil; }
+
+function doRoll(animate) {
+  /* Hot Hand is wall-clock gated, so the multiplier has to be asked in the same
+     units the buff was stored in. */
+  var res = E.roll(st, Math.random, Date.now());
+  flushLand();                       // the previous throw never goes unpaid
+  G.lastResult = res;
+  var i;
+  for (i = 0; i < st.units.length; i++) {
+    var an = unitAnim(i);
+    var sides = st.units[i];
+    var target = rotationFor(sides, res.indices[i]);
+    if (animate) {
+      var from = an.rot;
+      var delta = target - (from % (2 * Math.PI));
+      while (delta <= 0) delta += 2 * Math.PI;
+      an.from = from;
+      an.to = from + delta + 4 * Math.PI;         // two full turns, then settle
+      an.t = 0;
+      an.dur = 0.38;
+    } else {
+      an.rot = target;
+      an.t = 1;
+    }
+    an.index = res.indices[i];
+    an.flash = animate ? 0 : 0.12;
+  }
+  if (animate) { Audio2.play('roll'); G.pendingLand = res; }
+  else landResult(res);
+  markDirty();
+  return res;
+}
+
+function landResult(res) {
+  var i;
+  for (i = 0; i < st.units.length; i++) unitAnim(i).flash = 0.12;
+  spawnFloat(res);
+  Audio2.play('land', res.total);
+  if (res.combo > 1) buzz(18);
+}
+
+/* Payout feedback is owed to the throw, not to the tween. The settle animation
+   is 380 ms but from roller Lv1 the rolls arrive every 370 ms or less, so a
+   feedback hook that waited for the tween to finish simply never fired: floats,
+   the land blip and the edge flash all vanished from Lv1 to Lv4, which is most
+   of a session. Whichever happens first - the tween landing or the next throw
+   starting - pays the previous one. */
+function flushLand() {
+  if (!G.pendingLand) return;
+  var res = G.pendingLand;
+  G.pendingLand = null;
+  landResult(res);
+}
+
+function floatColor(v) {
+  if (v > 10000) return THEME.palette.gold;
+  if (v > 100) return THEME.palette.cyan;
+  return '#ffffff';
+}
+
+/* The dice that actually formed the match, or null. Guarded on length because a
+   result can outlive the die count for one frame after a +DIE purchase. */
+function matchedUnits(res) {
+  if (!res || res.combo <= 1 || res.indices.length !== st.units.length) return null;
+  return E.matchedSet(st.units, res.indices);
+}
+
+function spawnFloat(res) {
+  if (G.floatBudget > 0) return;                 // throttled to 8/s in fast mode
+  G.floatBudget = G.fastMode ? 0.125 : 0;
+  /* anchor a combo number over the dice that made it, not over the gap */
+  var set = matchedUnits(res);
+  var anchor = set ? unitX(set[0], st.units.length) : CW / 2;
+  /* Relative to the canvas, not a flat 150 px. With the fixed chrome at 418 px
+     the stage drops under 262 px on any viewport shorter than ~680 CSS px - a
+     360x740 phone with the URL bar showing, or any 360x640 - and the payout
+     number, the game's primary feedback, slid off the top and was clipped
+     before it faded. The small y jitter keeps a burst of pops legible. */
+  G.floats.push({
+    x: anchor + (Math.random() - 0.5) * 48,
+    y: Math.max(26, groundY() - Math.min(150, CH * 0.42)) - Math.random() * 16,
+    t: 0,
+    text: (res.combo > 1 ? '×' + res.combo + '  ' : '+') + E.fmt(res.total),
+    color: res.combo > 1 ? THEME.palette.gold : floatColor(res.total)
+  });
+}
+
+/* ---- purchases ----------------------------------------------------------- */
+
+function tryBuy(kind) {
+  wake();
+  if (frozen() || G.panelOpen) return;
+  if (kind === 'recast') { openRecast(); return; }
+  if (!E.canBuy(st, kind)) return;
+  var before = E.maxRoll(st.units);
+  var info = E.buy(st, kind);
+  if (!info) return;
+  if (kind === 'side') {
+    startMorph(info.unit, info.n);
+    G.maxRollTarget = E.maxRoll(st.units);
+    if (G.maxRollTarget !== before) G.maxRollTick = 0.7;
+    Audio2.play('grow');
+    buzz([12, 30, 18]);
+    G.shake = 0.22;
+    G.freezeUntil = clock() + 0.7;
+  } else {
+    Audio2.play('buy');
+    buzz(14);
+    G.shake = 0.1;
+    if (kind === 'unit') {
+      unitAnim(st.units.length - 1).rot = 0;
+      G.maxRollTarget = E.maxRoll(st.units);
+      /* a new die raises the true max by its single face, so the readout has to
+         tick here too or it sits stale until the next side purchase */
+      if (G.maxRollTarget !== before) G.maxRollTick = 0.7;
+    }
+  }
+  save();
+  refreshShop();
+  wake();
+}
+
+function startMorph(unitIndex, newSides) {
+  var count = st.units.length;
+  var oldSides = newSides - 1;
+  var R0 = radiusFor(oldSides, count), R1 = radiusFor(newSides, count);
+  G.morph = {
+    unit: unitIndex,
+    t: 0,
+    dur: 0.6,
+    from: resample(outline(oldSides, R0), 240),
+    to: resample(outline(newSides, R1), 240),
+    d0: contactDepth(oldSides, R0),
+    d1: contactDepth(newSides, R1),
+    newFace: newSides - 1
+  };
+  unitAnim(unitIndex).rot = 0;
+  unitAnim(unitIndex).t = 1;
+  unitAnim(unitIndex).index = 0;
+}
+
+/* ---- recast -------------------------------------------------------------- */
+
+function openRecast() {
+  if (!E.unlocked(st, 'recast')) return;
+  var gain = E.shardsFor(st);
+  var newM = E.globalMult(st.shards + gain);
+  $('#recastKeep').innerHTML =
+    'You keep <b>' + (st.shards + gain) + ' shards</b><br>' +
+    'Payout multiplier <b>×' + E.globalMult(st.shards).toFixed(2) + ' → ×' + newM.toFixed(2) + '</b><br>' +
+    'Die slots owned <b>' + st.slots + '</b><br>' +
+    'Roller <b>Lv ' + Math.max(0, st.roller) + ' → Lv ' + Math.max(0, Math.floor(st.roller / 2)) + '</b>';
+  $('#recastCost').textContent =
+    'Every die goes back to one side and coins go to zero. This run earned ' +
+    E.fmt(st.runCoins) + ', worth ' + gain + ' shards. Waiting ten times longer would only pay about 2.8 times the shards, so there is no reward for hoarding.';
+  openPanel('#recastPanel');
+}
+
+function doRecast() {
+  E.recast(st);
+  resetVisualState();
+  G.maxRollTarget = E.maxRoll(st.units);
+  G.maxRollShown = G.maxRollTarget;
+  G.shownCoins = 0;
+  st.adsUnlocked = true;              // ads never appear before a completed run
+  closePanel('#recastPanel');
+  Audio2.play('grow');
+  buzz([20, 40, 20, 40]);
+  save();
+  refreshShop();
+  wake();
+}
+
+/* ---- hot hand ------------------------------------------------------------ */
+
+/* Buff and cooldown live on absolute wall time, in milliseconds, and survive a
+   reload. On the page-local clock they reset to zero on every load, so the
+   20-minute cooldown was unenforceable: watch the ad, take the x3, refresh,
+   watch again - a permanent x3 on all income for the price of a refresh. */
+function hotState() {
+  var t = Date.now();
+  if (t < st.hotUntil) return 'live';
+  if (!st.adsUnlocked) return 'hidden';
+  if (st.roller < 0) return 'hidden';
+  if (t < st.hotReadyAt) return 'cooling';
+  return 'ready';
+}
+
+function startHot() {
+  var now = Date.now();
+  st.hotUntil = now + E.K.HOT_DURATION_S * 1000;
+  st.hotReadyAt = now + E.K.HOT_COOLDOWN_S * 1000;
+  Audio2.play('buy');
+  save();
+}
+
+function onHotChip() {
+  if (hotState() !== 'ready') return;
+  runRewarded('HOT HAND', {}, startHot);
+}
+
+/* ---- offline ------------------------------------------------------------- */
+
+function creditCoins(amount) {
+  if (!(amount > 0)) return;
+  st.coins = E.add(st.coins, amount);
+  st.runCoins = E.add(st.runCoins, amount);
+  st.lifetime = E.add(st.lifetime, amount);
+}
+
+/* Two rules the old version broke.
+   1. The claim is ACCUMULATED INTO THE SAVE, not assigned to a field on G. Every
+      save() advances savedAt, so a claim held only in memory was destroyed by
+      an app kill or by the next background/foreground cycle - and a second
+      handleReturn (90 s away to answer a message) overwrote four hours of
+      income with a few hundred coins.
+   2. Under OFFLINE_MIN_S the seconds are GRANTED SILENTLY rather than dropped
+      (SPEC.md section 4). The rAF loop is cancelled while the page is hidden,
+      so those seconds are not earned in game either; a player app-switching for
+      30-50 s at a time used to earn literally nothing for that time. */
+function handleReturn(secondsAway) {
+  if (secondsAway >= E.K.ADS_RETURN_GATE_S) st.adsUnlocked = true;
+  var amount = E.offlineEarnings(st, secondsAway, false);
+  if (secondsAway < E.K.OFFLINE_MIN_S || amount < 1) {
+    creditCoins(amount);
+  } else {
+    st.pendingOffline = E.add(st.pendingOffline, amount);
+    st.pendingOfflineSeconds += secondsAway;
+  }
+  markDirty();
+  if (st.pendingOffline >= 1) showOfflineCard();
+}
+
+function showOfflineCard() {
+  var paid = Math.min(st.pendingOfflineSeconds, E.K.OFFLINE_CAP_S);
+  /* Say what the economy actually pays. The line used to claim the roller "kept
+     going" for the whole capped window while offlineEarnings pays OFFLINE_RATE
+     of that, so a 6-hour absence read as four hours of output and credited two.
+     The rate is read from the constant so the two cannot drift apart, and the
+     ad button is left to be the upsell. */
+  $('#offAmt').textContent = '+' + E.fmt(st.pendingOffline);
+  $('#offLine').textContent = 'Your roller ran at ' + Math.round(E.K.OFFLINE_RATE * 100) +
+    '% speed for ' + E.fmtTime(paid) +
+    (st.pendingOfflineSeconds > paid ? ' of the ' + E.fmtTime(st.pendingOfflineSeconds) + ' you were away.'
+                                     : ' while you were away.');
+  $('#offDouble').style.display = st.adsUnlocked ? '' : 'none';
+  /* The page survives many background/foreground cycles on Android, so this has
+     to be re-armed on every welcome-back card, not once per cold start. */
+  $('#offDouble').disabled = false;
+  openPanel('#offlinePanel');
+}
+
+function collectOffline() {
+  creditCoins(st.pendingOffline);
+  st.pendingOffline = 0;
+  st.pendingOfflineSeconds = 0;
+  $('#offDouble').disabled = false;
+  closePanel('#offlinePanel');
+  save();
+  refreshShop();
+  wake();
+}
+
+/* The away time comes from the pending record, not from memory. A reward that
+   is resumed after a crash runs before the player has been away again, so the
+   in-memory away time is still 0 at that point and the old signature-less
+   version granted exactly zero coins for an ad that had already been watched.
+   The claim itself now survives the crash in the save, so the worst the ad can
+   do is pay the flat doubling. */
+function applyOfflineDouble(payload) {
+  var secs = (payload && payload.seconds) || st.pendingOfflineSeconds;
+  var ratio = E.K.OFFLINE_RATE > 0 ? E.K.OFFLINE_RATE_AD / E.K.OFFLINE_RATE : 2;
+  /* the better of "double what is on the card" and "recompute at the ad's rate
+     and 8 h cap": neither branch can ever pay less than the pending claim */
+  var full = Math.max(st.pendingOffline * ratio, E.offlineEarnings(st, secs, true));
+  if (!(full > 0)) return;
+  st.pendingOffline = full;
+  $('#offAmt').textContent = '+' + E.fmt(full);
+  collectOffline();
+}
+
+function onOfflineDouble() {
+  var seconds = st.pendingOfflineSeconds;
+  $('#offDouble').disabled = true;
+  runRewarded('OFFLINE DOUBLE', { seconds: seconds }, applyOfflineDouble);
+}
+
+/* ---- shop ---------------------------------------------------------------- */
+
+var SHOP = [
+  { kind: 'side', name: THEME.strings.addSide },
+  { kind: 'roller', name: THEME.strings.roller },
+  { kind: 'unit', name: THEME.strings.addUnit },
+  { kind: 'recast', name: THEME.strings.recast }
+];
+
+var shopNodes = {};
+
+/* `target` is passed in rather than recomputed: refreshShop runs every frame and
+   sideTarget allocates an object plus two Math.pow calls on every call. */
+function glyphPath(kind, target) {
+  if (kind === 'side') {
+    var sides = target ? target.n : E.K.MAX_SIDES;
+    return polyGlyph(Math.max(3, Math.min(sides, 12)));
+  }
+  if (kind === 'roller') return 'M-11-11h22v22h-22z M-4 -11 l0 22 M4 -11 l0 22';
+  if (kind === 'unit') return polyGlyph(6) + ' M0-14v-5 M-2.5-16.5h5';
+  return 'M0-13 L11 0 L0 13 L-11 0 Z M0-6 L5 0 L0 6 L-5 0 Z';
+}
+
+/* refreshShop runs every frame and the loop never idles once the roller is
+   owned, so the glyph strings are memoised and every DOM write below is guarded
+   on an actual change. Rebuilding four path strings 60 times a second was pure
+   churn on exactly the low-end phones this is aimed at. */
+var glyphCache = {};
+
+function polyGlyph(sides) {
+  if (glyphCache[sides]) return glyphCache[sides];
+  var pts = polyPoints(sides, 13, 0), i, d = 'M';
+  for (i = 0; i < pts.length; i++) d += pts[i][0].toFixed(1) + ' ' + pts[i][1].toFixed(1) + (i < pts.length - 1 ? ' L' : ' Z');
+  glyphCache[sides] = d;
+  return d;
+}
+
+function setText(node, text) { if (node.textContent !== text) node.textContent = text; }
+
+function buildShop() {
+  var wrap = $('#shop');
+  wrap.innerHTML = '';
+  SHOP.forEach(function (item) {
+    var b = el('button', 'btn');
+    b.id = 'btn-' + item.kind;
+    b.type = 'button';
+    b.innerHTML =
+      '<span class="ringwrap">' +
+        '<svg viewBox="0 0 48 48"><circle class="ring-bg" cx="24" cy="24" r="21"/>' +
+        '<circle class="ring-fg" cx="24" cy="24" r="21" stroke-dasharray="131.95" stroke-dashoffset="131.95"/></svg>' +
+        '<svg class="glyph" viewBox="-24 -24 48 48"><path d=""/></svg>' +
+      '</span>' +
+      '<span class="labels"><span class="name"></span><span class="sub"></span></span>' +
+      '<span class="price"></span>';
+    /* Commit on RELEASE, with a slide-off cancel, the way every other button in
+       this file (and Android itself) behaves. Buying on pointerdown meant a
+       thumb brushing the shop on its way to the die bought whatever it touched,
+       and RECAST - irreversible and capped at three uses - sits in that stack.
+       preventDefault stays on the down event so the ghost click is suppressed. */
+    var press = null;
+    b.addEventListener('pointerdown', function (ev) {
+      ev.preventDefault();
+      Audio2.unlock();
+      press = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+      try { b.setPointerCapture(ev.pointerId); } catch (e) {}
+    });
+    b.addEventListener('pointerup', function (ev) {
+      var p = press;
+      press = null;
+      if (!p || p.id !== ev.pointerId) return;
+      if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > 12) return;
+      var r = b.getBoundingClientRect();
+      if (ev.clientX < r.left || ev.clientX > r.right ||
+          ev.clientY < r.top || ev.clientY > r.bottom) return;
+      tryBuy(item.kind);
+    });
+    b.addEventListener('pointercancel', function () { press = null; });
+    b.addEventListener('pointerleave', function () { press = null; });
+    b.hidden = true;
+    wrap.appendChild(b);
+    shopNodes[item.kind] = {
+      root: b,
+      ring: b.querySelector('.ring-fg'),
+      glyph: b.querySelector('.glyph path'),
+      name: b.querySelector('.name'),
+      sub: b.querySelector('.sub'),
+      price: b.querySelector('.price')
+    };
+  });
+}
+
+function refreshShop() {
+  var target = E.sideTarget(st);
+  SHOP.forEach(function (item) {
+    var n = shopNodes[item.kind];
+    var kind = item.kind;
+    var visible = true, locked = false, cost = E.costOf(st, kind), sub = '', price = '';
+
+    if (kind === 'side') {
+      /* Shown before it unlocks, so the first button in the game gets the same
+         ghosted preview ROLLER and + DIE get. `visible` used to repeat the
+         unlock predicate exactly, which made `locked` provably always false and
+         left the shop completely empty for the player's first six coins. */
+      visible = target !== null && st.lifetime >= E.K.UNLOCK_SIDE_COINS / 3;
+      locked = !E.unlocked(st, kind);
+      if (target) {
+        sub = locked ? THEME.strings.lockedSide : THEME.strings.sideSub(target.n);
+        price = E.fmt(target.cost);
+      }
+    } else if (kind === 'roller') {
+      /* An owned upgrade never leaves the shop. Gating purely on die 1's size
+         made ROLLER and + DIE vanish the instant a Recast put every die back to
+         one side, with the roller still owned and its rolls/sec readout - the
+         only one in the game - gone with it. */
+      visible = st.roller < E.K.MAX_ROLLER_LEVEL &&
+                (st.roller >= 0 || st.units[0] >= E.K.UNLOCK_ROLLER_SIDES - 2);
+      locked = !E.unlocked(st, kind);
+      setText(n.name, st.roller < 0 ? THEME.strings.roller : THEME.strings.roller + ' Lv' + (st.roller + 1));
+      sub = locked ? THEME.strings.lockedRoller : THEME.strings.rollerSub(E.autoRate(st.roller + 1));
+      price = E.fmt(cost);
+    } else if (kind === 'unit') {
+      visible = st.slots < E.K.MAX_DICE &&
+                (st.slots > 1 || st.units[0] >= E.K.UNLOCK_UNIT_SIDES - 2);
+      locked = !E.unlocked(st, kind);
+      /* name the gate that is actually still unmet, side count first: at 8 or 9
+         sides with no roller this used to read "AFTER THE ROLLER" as though the
+         roller were the only thing in the way. */
+      sub = locked ? (st.units[0] < E.K.UNLOCK_UNIT_SIDES ? THEME.strings.lockedUnit
+                                                          : THEME.strings.lockedUnitRoller)
+                   : THEME.strings.unitSub(st.slots + 1);
+      price = E.fmt(cost);
+    } else {
+      var threshold = E.recastThreshold(st);
+      var done = st.recasts >= E.K.MAX_RECASTS;
+      visible = st.runCoins >= threshold * 0.5 || st.recasts > 0;
+      locked = !E.unlocked(st, 'recast');
+      /* Three runs is the whole of the content, and the screen says so rather
+         than offering a fourth identical five-minute loop forever. */
+      sub = done ? THEME.strings.recastDone
+          : locked ? 'AT ' + E.fmt(threshold) + ' THIS RUN'
+          : '+' + E.shardsFor(st) + ' SHARDS';
+      price = done ? 'RUN ' + st.recasts + '/' + E.K.MAX_RECASTS
+            : locked ? E.fmt(st.runCoins) + '/' + E.fmt(threshold) : '';
+      cost = threshold;
+    }
+
+    /* A card appearing or disappearing changes #stageWrap's height without
+       firing a window resize, so the canvas is re-measured on both transitions
+       for browsers with no ResizeObserver. sizeCanvas early-returns when the box
+       has not actually changed. */
+    if (visible && n.root.hidden) {
+      n.root.hidden = false;
+      n.root.classList.remove('enter');
+      void n.root.offsetWidth;            // restart the slide-up
+      n.root.classList.add('enter');
+      sizeCanvas();
+    } else if (!visible) {
+      if (!n.root.hidden) { n.root.hidden = true; sizeCanvas(); }
+      return;
+    }
+    if (kind !== 'roller') setText(n.name, item.name);
+    setText(n.sub, sub);
+    setText(n.price, price);
+    var d = glyphPath(kind, target);
+    if (n.lastGlyph !== d) { n.lastGlyph = d; n.glyph.setAttribute('d', d); }
+    n.root.classList.toggle('locked', locked);
+
+    var have = kind === 'recast' ? st.runCoins : st.coins;
+    var ready = !locked && (kind === 'recast' ? true : E.gte(st.coins, cost));
+    n.root.classList.toggle('ready', ready);
+    var p = locked && kind !== 'recast' ? 0 : Math.max(0, Math.min(1, have / cost));
+    var off = (131.95 * (1 - p)).toFixed(2);
+    if (n.lastRing !== off) { n.lastRing = off; n.ring.setAttribute('stroke-dashoffset', off); }
+  });
+}
+
+/* ---- panels -------------------------------------------------------------- */
+
+function openPanel(sel) { $(sel).classList.add('show'); G.panelOpen = true; }
+function closePanel(sel) {
+  $(sel).classList.remove('show');
+  G.panelOpen = document.querySelectorAll('.panel.show').length > 0;
+  wake();
+}
+
+/* ---- input --------------------------------------------------------------- */
+
+function onTap(ev) {
+  ev.preventDefault();
+  Audio2.unlock();
+  wake();
+  if (!G.hintGone) { G.hintGone = true; $('#hint').classList.add('gone'); }
+  if (frozen() || G.panelOpen) return;
+  /* wall clock, not the loop clock: the loop sleeps when nothing is animating,
+     and a sleeping clock would swallow every tap until it woke up */
+  var wall = performance.now() / 1000;
+  if (wall - G.tapGuard < E.K.TAP_COOLDOWN_S) return;
+  G.tapGuard = wall;
+  doRoll(!G.fastMode);
+  markDirty();
+  wake();
+}
+
+/* ---- loop ---------------------------------------------------------------- */
+
+function wake() {
+  if (!G.raf) { G.last = performance.now(); G.raf = requestAnimationFrame(frame); }
+}
+
+function busy() {
+  if (st.roller >= 0) return true;
+  if (G.floats.length || G.morph || G.shake > 0 || G.maxRollTick > 0 || G.pendingLand) return true;
+  if (Math.abs(G.shownCoins - st.coins) > 0.5) return true;
+  var i;
+  for (i = 0; i < G.anims.length; i++) if (G.anims[i].t < 1 || G.anims[i].flash > 0) return true;
+  return false;
+}
+
+function frame(now) {
+  var dt = Math.min(0.1, (now - G.last) / 1000);
+  G.last = now;
+  G.now = clock();
+  update(dt);
+  draw();
+  G.raf = busy() ? requestAnimationFrame(frame) : 0;
+}
+
+function update(dt) {
+  var i;
+
+  if (G.floatBudget > 0) G.floatBudget = Math.max(0, G.floatBudget - dt);
+
+  var rate = E.throwRate(st, 0);
+  G.fastMode = rate > E.K.FAST_ROLL_THRESHOLD;
+
+  /* Auto-roll on accumulated time, never on frames. The morph freeze and an open
+     panel are UI freezes, not income freezes: the coins still land, only the
+     die tween, the float and the blip are held back. Losing them was costing
+     0.7 s of auto income on every + SIDE and all of it while a panel was up. */
+  if (st.roller >= 0) {
+    G.autoAcc += dt * E.autoRate(st.roller);
+    var n = Math.floor(G.autoAcc);
+    if (n > 0) {
+      G.autoAcc -= n;
+      if (n > 240) n = 240;                         // a long stall never floods
+      var last = null;
+      for (i = 0; i < n; i++) last = E.roll(st, Math.random, Date.now());
+      var quiet = frozen() || G.panelOpen;
+      if (!quiet) {
+        flushLand();                                // never drop an unpaid throw
+        G.lastResult = last;
+        var j;
+        for (j = 0; j < st.units.length; j++) {
+          var an = unitAnim(j);
+          an.index = last.indices[j];
+          if (G.fastMode) { an.rot += dt * 9; an.t = 1; }
+          else {
+            var target = rotationFor(st.units[j], last.indices[j]);
+            var delta = target - (an.rot % (2 * Math.PI));
+            while (delta <= 0) delta += 2 * Math.PI;
+            an.from = an.rot; an.to = an.rot + delta + 4 * Math.PI; an.t = 0; an.dur = 0.38;
+          }
+        }
+        if (G.fastMode) { spawnFloat(last); Audio2.play('land', last.total); }
+        else G.pendingLand = last;
+      }
+      markDirty();
+    }
+  }
+
+  /* per-unit settle */
+  for (i = 0; i < G.anims.length; i++) {
+    var a = G.anims[i];
+    if (a.t < 1) {
+      a.t = Math.min(1, a.t + dt / a.dur);
+      a.rot = a.from + (a.to - a.from) * easeOutQuart(a.t);
+      a.squash = a.t;
+      if (a.t >= 1 && i === 0) flushLand();
+    }
+    if (a.flash > 0) a.flash = Math.max(0, a.flash - dt);
+  }
+
+  if (G.morph) {
+    G.morph.t += dt / G.morph.dur;
+    if (G.morph.t >= 1) G.morph = null;
+  }
+
+  if (G.shake > 0) G.shake = Math.max(0, G.shake - dt);
+  if (G.maxRollTick > 0) {
+    G.maxRollTick = Math.max(0, G.maxRollTick - dt);
+    var k = 1 - G.maxRollTick / 0.7;
+    G.maxRollShown = Math.round(G.maxRollShown + (G.maxRollTarget - G.maxRollShown) * Math.min(1, k * 0.35 + dt * 4));
+    if (G.maxRollTick === 0) G.maxRollShown = G.maxRollTarget;
+  }
+
+  for (i = G.floats.length - 1; i >= 0; i--) {
+    G.floats[i].t += dt / 0.7;
+    if (G.floats[i].t >= 1) G.floats.splice(i, 1);
+  }
+
+  /* Coin counter lerps rather than snapping, but never stays visibly behind:
+     the snap threshold is relative as well as absolute, so once the display is
+     within 0.01% of the real balance - finer than fmt() can show anyway - it
+     locks on instead of crawling toward it for seconds after a flurry of taps
+     or an offline claim. */
+  var diff = st.coins - G.shownCoins;
+  G.shownCoins += diff * Math.min(1, dt / 0.12);
+  if (Math.abs(st.coins - G.shownCoins) < Math.max(0.5, st.coins * 1e-4)) G.shownCoins = st.coins;
+
+  var coinNode = $('#coins');
+  var text = E.fmt(G.shownCoins);
+  if (coinNode.textContent !== text) coinNode.textContent = text;
+
+  var mrNode = $('#maxrollN');
+  var mrText = E.fmt(G.maxRollShown);
+  if (mrNode.textContent !== mrText) mrNode.textContent = mrText;
+
+  refreshHot();
+  refreshShop();
+}
+
+function refreshHot() {
+  var chip = $('#hotChip');
+  var s = hotState();
+  chip.classList.toggle('show', s !== 'hidden');
+  chip.classList.toggle('armed', s === 'ready');
+  chip.classList.toggle('live', s === 'live');
+  /* through setText like every other per-frame DOM write in this file: these ran
+     unguarded 60 times a second for the whole 20-minute cooldown on a string
+     that changes once a second */
+  if (s === 'live') setText(chip, THEME.strings.hot + ' ' + Math.ceil((st.hotUntil - Date.now()) / 1000) + 's');
+  else if (s === 'cooling') setText(chip, THEME.strings.hot + ' ' + E.fmtTime((st.hotReadyAt - Date.now()) / 1000));
+  else setText(chip, THEME.strings.hot);
+}
+
+/* ---- draw ---------------------------------------------------------------- */
+
+function draw() {
+  var P = THEME.palette;
+  cx.clearRect(0, 0, CW, CH);
+
+  var sx = 0, sy = 0;
+  if (G.shake > 0) {
+    var k = G.shake / 0.22 * 6;
+    sx = (Math.random() - 0.5) * k;
+    sy = (Math.random() - 0.5) * k;
+  }
+  cx.save();
+  cx.translate(sx, sy);
+
+  var gy = groundY();
+  cx.beginPath();
+  cx.moveTo(CW * 0.06, gy);
+  cx.lineTo(CW * 0.94, gy);
+  cx.lineWidth = 1.5;
+  cx.strokeStyle = P.ground;
+  cx.stroke();
+
+  var count = st.units.length;
+  var scale = fitScale(st.units);
+  var matched = matchedUnits(G.lastResult);
+  /* with one die there is nothing to disambiguate, so no pulse */
+  var sideTgt = count > 1 ? E.sideTarget(st) : null;
+  var i;
+
+  for (i = 0; i < count; i++) {
+    var sides = st.units[i];
+    var R = radiusFor(sides, count) * scale;
+    var an = unitAnim(i);
+    var x = unitX(i, count);
+    var depth = contactDepthAt(sides, R, an.rot);
+    var morphPts = null;
+
+    if (G.morph && G.morph.unit === i) {
+      var t = Math.min(1, G.morph.t);
+      var e = easeOutBack(t);
+      morphPts = [];
+      for (var p = 0; p < G.morph.from.length; p++) {
+        morphPts.push([
+          (G.morph.from[p][0] + (G.morph.to[p][0] - G.morph.from[p][0]) * e) * scale,
+          (G.morph.from[p][1] + (G.morph.to[p][1] - G.morph.from[p][1]) * e) * scale
+        ]);
+      }
+      depth = (G.morph.d0 + (G.morph.d1 - G.morph.d0) * e) * scale;
+    }
+
+    var y = gy - depth;
+
+    /* soft contact shadow */
+    cx.save();
+    cx.globalAlpha = 0.35;
+    cx.fillStyle = P.shadow;
+    cx.beginPath();
+    cx.ellipse(x, gy + 4, R * 0.7, 5, 0, 0, Math.PI * 2);
+    cx.fill();
+    cx.restore();
+
+    var squash = 1, squashY = 1;
+    if (an.t < 1) {
+      var q = an.t;
+      var s = q < 0.35 ? 1 - 0.12 * (q / 0.35) : q < 0.7 ? 0.88 + 0.18 * ((q - 0.35) / 0.35) : 1.06 - 0.06 * ((q - 0.7) / 0.3);
+      squashY = s;
+      squash = 1 + (1 - s) * 0.5;
+    }
+
+    var opts = {
+      sides: sides, R: R, rot: an.rot, x: x, y: y,
+      sx: squash, sy: squashY,
+      landed: an.index, flash: an.flash,
+      /* per die: only the dice in the match go gold, never a die that sat the
+         combo out for being under COMBO_MIN_SIDES */
+      combo: !!matched && matched.indexOf(i) >= 0,
+      /* the die + SIDE will grow, never hidden behind the morph that follows */
+      pulse: !!sideTgt && sideTgt.unit === i && !G.morph,
+      time: G.now,
+      labels: !G.fastMode || an.t >= 1,
+      labelAlpha: morphPts ? Math.max(0, (G.morph.t - 0.55) / 0.45) : 1,
+      stampFace: G.morph ? G.morph.newFace : -1,
+      stampScale: morphPts ? 1.6 - 0.6 * Math.min(1, Math.max(0, (G.morph.t - 0.55) / 0.45)) : 1,
+      morphPts: morphPts
+    };
+
+    /* motion ghosts while spinning */
+    if (an.t < 1 && !G.fastMode && !morphPts) {
+      for (var gI = 1; gI <= 3; gI++) {
+        cx.save();
+        cx.globalAlpha = 0.09;
+        drawDie(cx, i, Object.assign({}, opts, { rot: an.rot - gI * 0.09, labels: false, flash: 0, pulse: false }));
+        cx.restore();
+      }
+    }
+    if (G.fastMode && an.t >= 1) {
+      cx.save();
+      cx.globalAlpha = 0.12;
+      drawDie(cx, i, Object.assign({}, opts, { rot: an.rot + 0.18, labels: false, flash: 0, pulse: false }));
+      drawDie(cx, i, Object.assign({}, opts, { rot: an.rot - 0.18, labels: false, flash: 0, pulse: false }));
+      cx.restore();
+    }
+
+    THEME.drawUnit(cx, i, opts);
+
+    /* contact marker: the fixed notch every landed face rotates under */
+    cx.beginPath();
+    cx.moveTo(x - 6, gy + 11);
+    cx.lineTo(x + 6, gy + 11);
+    cx.lineTo(x, gy + 3);
+    cx.closePath();
+    cx.fillStyle = an.flash > 0 ? '#ffffff' : P.edge;
+    cx.fill();
+
+    if (G.morph && G.morph.unit === i && G.morph.t < 1) {
+      cx.save();
+      cx.globalAlpha = 1 - G.morph.t;
+      cx.beginPath();
+      cx.arc(x, y, R * (0.9 + G.morph.t * 0.9), 0, Math.PI * 2);
+      cx.lineWidth = 3;
+      cx.strokeStyle = P.gold;
+      cx.stroke();
+      cx.restore();
+    }
+  }
+
+  /* combo thread, drawn only between the dice that actually matched */
+  if (matched && matched.length >= 2) {
+    cx.save();
+    cx.globalAlpha = 0.7;
+    cx.beginPath();
+    for (i = 0; i < matched.length; i++) {
+      var u = matched[i];
+      var cxp = unitX(u, count);
+      var cyp = gy - contactDepth(st.units[u], radiusFor(st.units[u], count) * scale);
+      if (i === 0) cx.moveTo(cxp, cyp); else cx.lineTo(cxp, cyp);
+    }
+    cx.lineWidth = 1.5;
+    cx.strokeStyle = P.gold;
+    cx.stroke();
+    cx.restore();
+  }
+
+  var rise = Math.min(70, CH * 0.2);
+  for (i = 0; i < G.floats.length; i++) {
+    var f = G.floats[i];
+    cx.save();
+    cx.globalAlpha = f.t < 0.15 ? f.t / 0.15 : 1 - Math.pow(f.t, 3);
+    cx.fillStyle = f.color;
+    cx.font = '600 22px ui-monospace, Menlo, Consolas, monospace';
+    cx.textAlign = 'center';
+    cx.fillText(f.text, f.x, f.y - rise * f.t);
+    cx.restore();
+  }
+
+  cx.restore();
+}
+
+/* ---- settings ------------------------------------------------------------ */
+
+function setMuteUI() {
+  var on = !st.muted;
+  $('#slash').style.display = on ? 'none' : '';
+  $('#wave1').style.display = on ? '' : 'none';
+  $('#wave2').style.display = on ? '' : 'none';
+  $('#setMute').textContent = 'SOUND: ' + (on ? 'ON' : 'OFF');
+}
+
+function toggleMute() {
+  st.muted = !st.muted;
+  setMuteUI();
+  save();
+}
+
+function hardReset() {
+  Store.remove(E.K.SAVE_KEY);
+  st = E.newState();
+  resetVisualState();
+  G.shownCoins = 0; G.maxRollShown = 1; G.maxRollTarget = 1;
+  G.hintGone = false;
+  $('#hint').classList.remove('gone');
+  closePanel('#settingsPanel');
+  closePanel('#offlinePanel');        // the pending claim went with the save
+  setMuteUI();
+  refreshShop();
+  save();
+  wake();
+}
+
+/* ---- dev tools (only with ?dev=1) ---------------------------------------- */
+
+function buildDev() {
+  if (!DEV) return;
+  /* a console handle for poking at a live run; never present without ?dev=1 */
+  globalThis.OMS = { get state() { return st; }, loop: G, econ: E };
+  var box = $('#dev');
+  box.classList.add('show');
+  $('#app').classList.add('devon');       // keeps the bar off the ROLLER card
+  function grant(amount) {
+    st.coins = E.add(st.coins, amount);
+    st.runCoins = E.add(st.runCoins, amount);
+    st.lifetime = E.add(st.lifetime, amount);
+  }
+  [
+    ['+1K', function () { grant(1000); }],
+    ['+1M', function () { grant(1e6); }],
+    /* offlineEarnings is zero until the roller exists, so before that this
+       grants ten minutes of the current hand-rolling rate instead of nothing */
+    ['+10 MIN', function () {
+      grant(st.roller >= 0 ? E.offlineEarnings(st, 600, false) : E.income(st, 1.7, 0) * 600);
+    }],
+    ['OFFLINE 2H', function () { handleReturn(7200); }],
+    ['AD FAIL', function () { Ads.forceFail = !Ads.forceFail; }],
+    ['WIPE', hardReset]
+  ].forEach(function (pair) {
+    var b = el('button', '', pair[0]);
+    /* every dev grant is persisted, or the next reload silently undoes it */
+    b.addEventListener('click', function () { pair[1](); save(); refreshShop(); wake(); });
+    box.appendChild(b);
+  });
+}
+
+/* ---- boot ---------------------------------------------------------------- */
+
+/* Boot is async only because the durable store is: Capacitor Preferences hands
+   the save back through a promise, and reading localStorage first would mean
+   starting a brand-new game whenever Android had cleared the WebView's copy. */
+function boot() {
+  loadAsync().then(start, function () { start(0); });
+}
+
+function start(away) {
+  G.shownCoins = st.coins;
+  G.maxRollTarget = G.maxRollShown = E.maxRoll(st.units);
+  if (st.lifetime > 0) { G.hintGone = true; $('#hint').classList.add('gone'); }
+
+  buildShop();
+  buildDev();
+  setMuteUI();
+  sizeCanvas();
+  refreshShop();
+
+  /* The welcome-back card opens first so a resumed OFFLINE DOUBLE lands on the
+     card the player is actually looking at, with the away time already known. */
+  handleReturn(away);
+  resumePendingReward();
+
+  cv.addEventListener('pointerdown', onTap, { passive: false });
+  cv.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+
+  $('#muteBtn').addEventListener('click', toggleMute);
+  $('#gearBtn').addEventListener('click', function () { openPanel('#settingsPanel'); });
+  $('#setClose').addEventListener('click', function () { closePanel('#settingsPanel'); });
+  $('#setMute').addEventListener('click', toggleMute);
+  $('#hotChip').addEventListener('click', onHotChip);
+  $('#offCollect').addEventListener('click', collectOffline);
+  $('#offDouble').addEventListener('click', onOfflineDouble);
+  $('#recastNo').addEventListener('click', function () { closePanel('#recastPanel'); });
+  $('#recastYes').addEventListener('click', doRecast);
+
+  var resetBtn = $('#setReset');
+  var holdStart = 0, holdTimer = 0;
+  /* Idempotent, and the pointer is captured. A two-finger press on a 56px-tall
+     full-width control ran holdBegin twice and leaked the first interval: after
+     the reset fired, the leaked, unreferenced interval kept calling hardReset
+     every 100 ms with the settings panel already closed, so there was no
+     pointerup target left and the save was re-wiped until the page was killed.
+     hardReset also runs outside the tick so a stale one cannot re-enter it. */
+  function holdBegin(ev) {
+    ev.preventDefault();
+    if (holdTimer) return;
+    try { resetBtn.setPointerCapture(ev.pointerId); } catch (e) {}
+    holdStart = Date.now();
+    resetBtn.textContent = 'KEEP HOLDING…';
+    holdTimer = setInterval(function () {
+      var held = (Date.now() - holdStart) / 1000;
+      if (held >= 2) { holdEnd(); setTimeout(hardReset, 0); }
+      else resetBtn.textContent = 'KEEP HOLDING… ' + (2 - held).toFixed(1);
+    }, 100);
+  }
+  function holdEnd() {
+    if (holdTimer) { clearInterval(holdTimer); holdTimer = 0; }
+    resetBtn.textContent = 'HOLD TO ERASE EVERYTHING';
+  }
+  resetBtn.addEventListener('pointerdown', holdBegin);
+  resetBtn.addEventListener('pointerup', holdEnd);
+  resetBtn.addEventListener('pointerleave', holdEnd);
+  resetBtn.addEventListener('pointercancel', holdEnd);
+
+  /* The window resize events below do not fire when a shop card slides in and
+     takes 72 px off the stage, which is the case that actually matters on a
+     phone - the first one lands at ~0:06, right before the d1->d2 morph. */
+  if (globalThis.ResizeObserver) {
+    try { new ResizeObserver(sizeCanvas).observe($('#stageWrap')); } catch (e) {}
+  }
+  addEventListener('resize', sizeCanvas);
+  addEventListener('orientationchange', sizeCanvas);
+  addEventListener('visibilitychange', function () {
+    if (document.hidden) {
+      save();
+      if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }
+    } else {
+      var back = st.savedAt ? (Date.now() - st.savedAt) / 1000 : 0;
+      handleReturn(back);
+      wake();
+    }
+  });
+  addEventListener('pagehide', save);
+
+  wake();
+}
+
+if (document.readyState === 'loading') addEventListener('DOMContentLoaded', boot);
+else boot();
+})();
+</script>
+</body>
+</html>
