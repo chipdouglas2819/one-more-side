@@ -15,7 +15,7 @@ Newest first. "Nate" means Nate decided; "Claude" means Claude made a routine ca
 | 2026-09-17 | The jackpot face is the die's 1, so the lowest roll becomes the most exciting | Turns the worst outcome into the best without adding a new face | Claude (v2 designer) |
 | 2026-09-17 | A match multiplies only the matched dice, and never a jackpot face | Multiplying the whole throw or a jackpot made a match worth thousands of normal rolls and broke pacing | Claude (v2 build) |
 | 2026-09-17 | Sides go to 100; cost grows 13 to 16% per side instead of 2.2x | With faces 1 to N one more side adds little income, so its price can't grow exponentially; 2.2 per side would make side 100 cost about 10^33 | Claude |
-| 2026-09-17 | Past about 20 sides the die draws as a dial with the landed number in a window | Individual numerals become unreadable on a phone | Claude |
+| 2026-09-17 | Numbers on every face up to 13 sides, tick marks from 14 to 39, then a dial with the landed number in a window from 40 to 100 | Individual numerals become unreadable on a phone | Claude |
 | 2026-09-17 | Keep 3 dice on screen for now; a documented grid plan for more later | Nate raised late-game crowding; building the grid before the content exists would be wasted | Claude |
 | 2026-09-17 | Minimal skins: 3 die looks, 3 backgrounds, one grid, +10% for a complete category | Nate asked for collectible skins with a set bonus and free choice | Nate (feature); Claude (scope) |
 | 2026-09-17 | Combo line removed; matches shown by glow plus a named burst | Nate couldn't tell what the line or the random 2x meant | Nate |

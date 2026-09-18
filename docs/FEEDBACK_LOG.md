@@ -10,7 +10,7 @@ Every piece of Nate's feedback on this game, verbatim, newest first. Each entry 
 
 | Decision | Status |
 |---|---|
-| This `docs/` folder: vision, feedback log, decisions, roadmap, research archive, production handoff | done, except `PRODUCTION_HANDOFF.md`: in progress, written after v2.1 lands |
+| This `docs/` folder: vision, feedback log, decisions, roadmap, research archive, production handoff | done; `PRODUCTION_HANDOFF.md` done 2026-09-18 |
 | `CLAUDE.md` in the game folder requires every future session to keep these files current | done |
 
 ---
@@ -40,7 +40,7 @@ Every piece of Nate's feedback on this game, verbatim, newest first. Each entry 
 | F5 | No menu fiesta; show, don't tell | Design rules 2 and 3. One shop strip, one skins grid, one settings sheet | done; applies to every change |
 | F6 | Buy and collect skins; completing a category gives a boost; free choice of look | v2: 3 die skins and 3 backgrounds bought with coins; completing a category gives +10% income for good; equip any owned skin | done (minimal); more categories planned |
 | F7 | Capture a full dice spin at any speed | v2: tumble animation with easing. In fast-roll mode (above 8 rolls a second) the landed number shows in about 60 ms flashes. Nate's bar is not yet met at high speed | **open**: needs a production solution |
-| F8 | Render dice with up to 100 sides | v2: numbered faces to about 20 sides, then a dial with the landed number in a window, up to 100. Checked in a browser, not yet on Nate's phone | done; needs phone check |
+| F8 | Render dice with up to 100 sides | v2: numbers on every face up to 13 sides, tick marks from 14 to 39, then a dial with the landed number in a window from 40 to 100. Checked in a browser, not yet on Nate's phone | done; needs phone check |
 | F9 | Faces must read 1 to 6, not coin values | v2: faces read 1 to N | done |
 | F10 | Buy a multiplied side or jackpot side for each die | v2: x2 side (doubles the highest faces one at a time, up to 12, later x3) and one jackpot side per die (the 1 face turns gold with a star and pays big; its tier rises with purchases) | done |
 | F11 | Many dice on screen late in a long game ("after someone plays a year or two") | v2 caps at 3 dice and about 130 minutes of content. The layout plan for more dice is in `SPEC.md`. **Nate expects years of play; the prototype has two hours.** This is the largest gap between prototype and product | **open**: see `ROADMAP.md`, long-term progression |
@@ -58,7 +58,7 @@ Every piece of Nate's feedback on this game, verbatim, newest first. Each entry 
 
 > "also ensure this will be testable on my github, while emailing me the link to try it, just like the other games."
 
-Decision: public repo `chipdouglas2819/one-more-side` with GitHub Pages; link emailed as a reply in the "gamez" thread. Status: done (v1 at https://chipdouglas2819.github.io/one-more-side/).
+Decision: public repo `chipdouglas2819/one-more-side` with GitHub Pages; link emailed to Nate. Status: done (v1 at https://chipdouglas2819.github.io/one-more-side/).
 
 ---
 

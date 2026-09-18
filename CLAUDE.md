@@ -16,10 +16,10 @@ Dice idle game prototype. Owner: Nate (they/them), very little programming exper
 - New feedback from Nate goes into `docs/FEEDBACK_LOG.md` **verbatim**, dated, with the decision and a status.
 - New decisions go into `docs/DECISIONS.md` with who made them and why.
 - Update `docs/ROADMAP.md`, and `SPEC.md` if rules or numbers changed.
-- Update this game's row in the hub: `C:\Users\Nate\Downloads\- Project Hub\README.md`, plus a dated line in the hub's `DECISIONS.md`.
+- Update this game's row in the local Project Hub, plus a dated line in the hub's `DECISIONS.md`. Paths and other private details are in `CLAUDE.local.md`, which is not committed.
 
 ## Publishing
-Public repo `chipdouglas2819/one-more-side`, GitHub Pages from `main` at the repo root: https://chipdouglas2819.github.io/one-more-side/. Commit as `chipdouglas2819 <chipdouglas2819@gmail.com>`. Email a new link only when Nate asks.
+Public repo `chipdouglas2819/one-more-side`, GitHub Pages from `main` at the repo root: https://chipdouglas2819.github.io/one-more-side/. Commit with the identity in `CLAUDE.local.md`. Email a new link only when Nate asks.
 
 ## Privacy
 This repo is public. Never commit personal details: finances, account emails, network addresses, the portfolio plan. Those stay in the local Project Hub.

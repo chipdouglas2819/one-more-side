@@ -12,7 +12,7 @@ Last updated: 2026-09-18
 ## Now
 
 - Nate plays v2.1 on their phone.
-- Write `PRODUCTION_HANDOFF.md` from the final v2.1 code.
+- `PRODUCTION_HANDOFF.md` is written (2026-09-18). Nate reviews its section 11, open decisions; saying "defaults" accepts all of them.
 
 ## Open questions only Nate can settle by playing
 
@@ -27,7 +27,7 @@ Last updated: 2026-09-18
 
 Order of work. Most of these are one-time costs shared with every future app on the account.
 
-1. **Wrap with Capacitor**, using InfuseCalc's Android project (`Downloads\InfuseCalc Project\infusecalc`) as the template.
+1. **Wrap with Capacitor**, using the Capacitor Android project from another of Nate's apps as the template (its location is in the local Project Hub).
 2. **Real rewarded ads:** swap the placeholder `Ads` adapter for AdMob rewarded ads (Hot Hand, offline double). Keep the rules: grant the reward even if the ad fails, never block progress behind an ad, no forced ads in a first session.
 3. **Saves on device:** the code already writes to Capacitor Preferences as well as the browser store; verify on a real device.
 4. **Play Console (Nate's existing personal developer account; details in the local Project Hub):**

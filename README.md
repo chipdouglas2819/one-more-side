@@ -1,4 +1,4 @@
-# ONE MORE SIDE — prototype v2
+# ONE MORE SIDE — prototype v2.1
 
 A one-thumb idle game for Android. You start with a die that has **one side**.
 Every coin buys it another side. A six-sided die reads **1 2 3 4 5 6**, exactly
@@ -192,8 +192,8 @@ If the result looks better, change it in `index.html` and run `node check.js`
 Everything in the spec is built, and both commands pass:
 
 - 11 of 11 pacing milestones inside ±35%, from the first side at 8 seconds to the
-  shop emptying at 133 minutes.
-- 6 of 6 hard rules pass, on all seven ways of playing.
+  shop emptying at about 130 minutes.
+- 6 of 6 hard rules pass, on all nine ways of playing.
 - No dead zone over four minutes for anybody, including the player who never
   prestiges.
 
