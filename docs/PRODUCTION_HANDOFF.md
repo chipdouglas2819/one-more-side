@@ -6,7 +6,7 @@ Last updated: 2026-09-18. Written from prototype v2.1.
 
 This is the bridge from the prototype to a real Android release. It has two readers:
 
-- **Nate**, who decides. Read sections 2, 3, 7, 9, 10 and 11, plus the steps marked **[Nate]** in section 8 (the launch checklist). Section 11 lists every open decision with a recommended default, so nothing stalls if you just say "go with the defaults". **One task is urgent:** developer verification in Play Console (section 8, step 1), due 30 September 2026.
+- **Nate**, who decides. Read sections 2, 3, 7, 9, 10 and 11, plus the steps marked **[Nate]** in section 8 (the launch checklist). Section 11 lists every open decision with a recommended default, so nothing stalls if you just say "go with the defaults". Nothing is urgent: developer verification (section 8, step 1) was checked in Play Console on 2026-09-18 and needs no action until the game's package name is registered.
 - **A future builder** (a person or an AI session) who writes the code. Read everything, starting with sections 4 and 5.
 
 How to use it:
@@ -331,8 +331,8 @@ Checked against Google, AdMob and Capacitor pages in September 2026. Re-check da
 
 Each step is marked **[Nate]** (clicks in a website or on a phone; no code) or **[Builder]** (code, tools and commands; a person or an AI session). Where a step says "terminal", that means a command window opened in the project folder; the builder handles those.
 
-**Do now**
-1. [Nate] **Developer verification:** in Play Console, confirm the account and package show as verified on the home page. Enforcement starts in some countries on **30 September 2026** and goes global in 2027, so do this before any other work: https://developer.android.com/developer-verification/guides/google-play-console , https://android-developers.googleblog.com/2026/06/android-developer-verification.html
+**Before the first upload**
+1. [Nate] **Developer verification:** Play removes apps whose package names are not registered by 30 September 2026, and enforcement for other stores spreads through 2027. Checked in Play Console on 2026-09-18: the account identity is already on file and the account has no apps, so nothing is due on that date. When the app is created, register its package name on the Android developer verification page ("Register package name"), before the first upload: https://developer.android.com/developer-verification/guides/google-play-console , https://android-developers.googleblog.com/2026/06/android-developer-verification.html
 
 **Tools and project**
 2. [Builder] Install Node.js (LTS), Android Studio (it bundles the Java JDK and the Android SDK) and Git. Capacitor's setup page lists the requirements: https://capacitorjs.com/docs/android
@@ -395,7 +395,7 @@ Effort is in AI sessions of about 2 to 3 hours. Estimates are rough and assume o
 
 | Phase | Work | Done when | Sessions |
 |---|---|---|---|
-| 0. Verify and phone check | First, developer verification (section 8, step 1; due 30 September 2026). Then Nate plays v2.1 and answers section 11, including the phone checks (decisions 2, 18 to 21) | Account verified; answers logged in `FEEDBACK_LOG.md` and `DECISIONS.md` | 0 to 1 (Nate's time) |
+| 0. Verify and phone check | Nate plays v2.1 and answers section 11, including the phone checks (decisions 2, 18 to 21) | Answers logged in `FEEDBACK_LOG.md` and `DECISIONS.md` | 0 to 1 (Nate's time) |
 | 1. Wrap and device test | Capacitor project from the template; build to a phone; run the section 3 performance test on a cheap phone | 60 fps (at least 50) in the busiest scene, or a PixiJS decision | 2 to 3 |
 | 2. Foundations | Economy as a module the gates import; the section 4 known limits (saves, clock, per-frame cost, text, haptics, reduced motion, dev tools, seeded randomness) | All gates pass; a save survives a forced close | 3 to 5 |
 | 3. Core presentation | Fast-roll Option A (F7); 2.5D die look; float and burst tiers; jackpot minimum width and jewel (F16); colour-blind marks; text sizes | Nate says the spin feels "full" on the phone | 5 to 8 |
@@ -413,7 +413,7 @@ Total to launch: about 26 to 41 sessions, plus at least 14 days for the closed t
 
 Each has a recommended default. Saying "defaults" accepts them all.
 
-**Do now, before anything else:** developer verification in Play Console (section 8, step 1). Some countries enforce it from 30 September 2026.
+**Nothing is due right now.** Developer verification (section 8, step 1) needs no action until the app is created; its package name is registered then.
 
 | # | Decision | Recommended default |
 |---|---|---|
