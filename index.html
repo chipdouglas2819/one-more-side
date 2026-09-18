@@ -123,6 +123,7 @@ body{
 .chip.show{display:flex}
 .chip.armed{border-color:var(--accent);color:var(--accent)}
 .chip.live{border-color:var(--gold);color:var(--gold)}
+.chip.cooling{pointer-events:none;opacity:.55}
 .chip svg{width:14px;height:14px;flex:0 0 14px;display:none}
 .chip.live svg{display:block}
 .chip .ring-bg2{fill:none;stroke:var(--line);stroke-width:2.6}
@@ -156,6 +157,9 @@ body{
 .btn.ready .price{color:var(--accent)}
 .btn:active{transform:scale(.985)}
 .btn.locked{opacity:.52}
+/* a held shop card must never be taken over by browser panning or a long-press
+   callout: on Android either one fires pointercancel and ends the hold */
+#shop .btn{touch-action:none;-webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .ringwrap{position:relative;flex:0 0 48px;width:48px;height:48px}
 .ringwrap svg{position:absolute;inset:0;width:48px;height:48px}
 /* Four cards at 64px plus the gaps and the padding is 298px, against the 270px
@@ -186,6 +190,12 @@ body{
 .price{font-size:15px;letter-spacing:.5px;color:var(--dim);flex:0 0 auto}
 #btn-recast{border-color:var(--line)}
 #btn-recast.ready{border-color:var(--gold)}
+/* Hold-to-buy. The card stays pressed and its ring sweeps round for as long as
+   the repeater is buying, so the finger can feel the difference between a tap
+   and a hold without a word on screen. */
+.btn.holding{transform:scale(.985);background:var(--surface2);border-color:var(--gold)}
+.btn.holding .ring-fg{stroke:var(--gold);animation:ringsweep 700ms linear infinite}
+@keyframes ringsweep{from{transform:rotate(-90deg)}to{transform:rotate(270deg)}}
 
 /* ---- panels ---- */
 .panel{position:fixed;inset:0;z-index:20;display:none;align-items:center;justify-content:center;
@@ -205,6 +215,21 @@ body{
 .cta.danger{border-color:var(--danger-line);color:var(--danger)}
 .row{display:flex;gap:8px}
 .row .cta{flex:1}
+
+/* ---- recast: numbers and icons, no paragraphs ---- */
+#recastCard{gap:12px}
+#recastCard .row .cta{height:50px}
+.rc-run{font-size:10px;letter-spacing:2.4px;color:var(--dim);text-align:center;margin-top:-6px}
+.rc-hero{display:flex;align-items:baseline;justify-content:center;gap:10px;color:var(--gold);font-size:32px;font-weight:600}
+.rc-hero .from,.rc-hero .arrow{font-size:17px;color:var(--dim);font-weight:400}
+.rc-gain{display:flex;align-items:center;justify-content:center;gap:6px;font-size:12px;letter-spacing:2px;color:var(--gold);margin-top:-4px}
+.rc-line{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;letter-spacing:1px}
+.rc-tag{flex:0 0 46px;font-size:9px;letter-spacing:2px;color:var(--dim)}
+.rc-chip{display:inline-flex;align-items:center;gap:5px;height:24px;padding:0 8px;
+  border:1px solid var(--line);border-radius:12px;color:var(--fg);white-space:nowrap}
+.rc-line.reset .rc-chip{color:var(--dim);border-style:dashed}
+.rc-chip svg,.rc-gain svg{width:13px;height:13px;flex:0 0 13px;fill:none;stroke:currentColor;
+  stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 
 /* ---- skins: one panel, one grid, no sub-menus ---- */
 #skinsCard{max-width:352px;gap:10px}
@@ -292,12 +317,15 @@ body{
 </div>
 
 <div id="recastPanel" class="panel">
-  <div class="card">
+  <div class="card" id="recastCard">
     <h2>RECAST</h2>
-    <div class="keep" id="recastKeep"></div>
-    <p id="recastCost"></p>
+    <div class="rc-run" id="rcRun"></div>
+    <div class="rc-hero"><span class="from" id="rcFrom"></span><span class="arrow">&rarr;</span><span id="rcTo"></span></div>
+    <div class="rc-gain" id="rcGain"></div>
+    <div class="rc-line" id="rcKeep"></div>
+    <div class="rc-line reset" id="rcReset"></div>
     <div class="row">
-      <button class="cta ghost" id="recastNo">NOT YET</button>
+      <button class="cta ghost" id="recastNo">CANCEL</button>
       <button class="cta" id="recastYes">RECAST</button>
     </div>
   </div>
@@ -325,7 +353,7 @@ body{
     <button class="cta ghost" id="setTheme">THEME: DARK</button>
     <button class="cta ghost danger" id="setReset">HOLD TO ERASE EVERYTHING</button>
     <p id="resetHint">Hold the button for two seconds. There is no undo.</p>
-    <p id="verLine">ONE MORE SIDE &mdash; prototype v2.0</p>
+    <p id="verLine">ONE MORE SIDE &mdash; prototype v2.1</p>
     <button class="cta ghost" id="setClose">CLOSE</button>
   </div>
 </div>
@@ -401,7 +429,7 @@ var K = {
   X2_GROWTH: 2.00,
   X2_UNIT_MULT: 4,
   X2_MAX: 12,
-  X2_UNLOCK_SIDES: 8,
+  X2_UNLOCK_SIDES: 9,
   TIER_BASE: 2,
   TIER_MAX: 3,
   /* Spec value 25. The x3 tier converts twelve doubled faces into tripled ones,
@@ -616,7 +644,9 @@ function multiplier(st, nowMs) {
   return m;
 }
 
-function recastThreshold(st) { return K.RECAST_AT * runMult(st); }
+/* Shards only, not the skin-set bonus: completing a set mid-run must never
+   switch off a RECAST that is already lit (SPEC Appendix A13). */
+function recastThreshold(st) { return K.RECAST_AT * globalMult(st.shards); }
 
 function shardsFor(st) {
   var threshold = recastThreshold(st);
@@ -625,9 +655,9 @@ function shardsFor(st) {
   return Math.floor(K.SHARD_COEF * Math.pow(ratio, K.SHARD_EXP));
 }
 
-/* Coins that would still raise the shard payout, or 0 once it has saturated.
-   The RECAST card prints this so waiting is a visible choice with a visible
-   end, rather than a secret the player has to guess at. */
+/* Equal to the threshold while SHARD_RATIO_CAP is 1: the shard payout is flat,
+   so waiting past a lit RECAST earns nothing. Kept only so the RECAST card's
+   rising/maxed branch stays dormant rather than deleted. */
 function shardsMaxedAt(st) { return recastThreshold(st) * K.SHARD_RATIO_CAP; }
 
 /* ---- combo, and expected value ------------------------------------------
@@ -668,11 +698,16 @@ function matchedSet(dice, indices) {
   return out.length ? out : null;
 }
 
-/* The multiplier the matched set pays: every participant matched, or a pair. */
+/* The multiplier the matched set pays: three dice matching pay TRIPLES, any
+   pair pays DOUBLES - whatever the number of dice on the table. Paying a pair
+   ×3 whenever it was "every participant" made the pair fall to ×2 the moment a
+   third die reached COMBO_MIN_SIDES, and that drop outweighed the small die's
+   own gain, so + SIDE on it lowered income and a player who refuses that froze
+   at 100/100/5 for good (SPEC Appendix A13). */
 function comboFor(dice, indices) {
   var set = matchedSet(dice, indices);
   if (!set) return 1;
-  return set.length >= participants(dice).length ? K.COMBO_MULT : K.COMBO_PAIR_MULT;
+  return set.length >= 3 ? K.COMBO_MULT : K.COMBO_PAIR_MULT;
 }
 
 /* E[ the matched dice's OWN faces . 1{every die in `set` lands the same index} ].
@@ -712,7 +747,7 @@ function expectedPayout(dice) {
   for (d = 0; d < dice.length; d++) base = add(base, dieExpected(dice[d]));
   var p = participants(dice);
   if (p.length < 2) return base;
-  if (p.length === 2) return add(base, (K.COMBO_MULT - 1) * setOwnEV(dice, p));
+  if (p.length === 2) return add(base, (K.COMBO_PAIR_MULT - 1) * setOwnEV(dice, p));
   /* Three participants. Writing w_d for the weight a die's own face carries -
      3 when all three match, 2 when it is in the matching pair, 1 otherwise -
      the all-equal terms cancel exactly and what is left is one pair sum:
@@ -758,7 +793,7 @@ function maxRoll(dice) {
     for (i = 0; i < minS; i++) {                   // every participant on index i
       var s = 0, okAll = true, w;
       for (d = 0; d < p.length; d++) if (!comboEligible(dice[p[d]], i)) { okAll = false; break; }
-      w = okAll ? K.COMBO_MULT : 1;                // a jackpot face voids the match
+      w = okAll ? (p.length >= 3 ? K.COMBO_MULT : K.COMBO_PAIR_MULT) : 1; // jackpot voids it
       for (d = 0; d < p.length; d++) s = add(s, mul(faceValue(dice[p[d]], i), w));
       best = Math.max(best, add(s, outside));
     }
@@ -1255,7 +1290,10 @@ var G = {
   merge: null,          // payouts skipped by the 8/s float throttle, summed
   anims: [],
   geom: [],             // per-die screen x / y / R, so a float knows its anchor
-  morph: null,
+  morphs: [],           // per-die + SIDE morph, so two dice can grow in one hold
+  hold: null,           // the one live hold-to-buy repeater, or null
+  lastTick: 0,          // performance.now() of the last hold tick sound
+  lastBuzz: 0,          // ... and of the last hold haptic
   fastMode: false,
   spinPhase: 0,
   snapAcc: 0,
@@ -1271,7 +1309,8 @@ var G = {
 };
 
 function resetVisualState() {
-  G.morph = null;
+  G.morphs.length = 0;
+  if (G.hold) endHold(false);
   G.pendingLand = null;
   G.lastResult = null;
   G.anims.length = 0;
@@ -1346,7 +1385,10 @@ var Store = (function () {
 
 function save() {
   st.savedAt = Date.now();
-  try { Store.set(E.K.SAVE_KEY, JSON.stringify(st)); } catch (e) {}
+  var blob = JSON.stringify(st);
+  try { Store.set(E.K.SAVE_KEY, blob); } catch (e) {}
+  /* a migrated v1 save is removed only once the v2 copy is safely written */
+  if (G.dropV1 && Store.get(E.K.SAVE_KEY) === blob) { Store.remove(E.K.SAVE_KEY_V1); G.dropV1 = false; }
   G.dirty = false;
   if (G.saveHandle) { clearTimeout(G.saveHandle); G.saveHandle = 0; }
 }
@@ -1485,6 +1527,11 @@ function migrateV1(data) {
   out.muted = !!data.muted;
   out.adsUnlocked = !!data.adsUnlocked;
   out.savedAt = Math.max(0, num(data.savedAt, 0));
+  /* a pending claim, an ad reward in flight, the Hot Hand clocks and the theme
+     survive too; sanitise() clamps every one of them */
+  ['pendingOffline', 'pendingOfflineSeconds', 'pendingOfflineAway', 'pending',
+   'hotUntil', 'hotReadyAt'].forEach(function (k) { if (data[k] != null) out[k] = data[k]; });
+  if (data.theme === 'light' || data.theme === 'dark') out.theme = data.theme;
   migrated = true;
   return sanitise(out);
 }
@@ -1524,7 +1571,7 @@ function loadAsync() {
     /* fall through to v1 whether v2 was ABSENT or UNREADABLE */
     return Store.getAsync(E.K.SAVE_KEY_V1).then(function (raw1) {
       var a1 = applyLoaded(raw1);
-      if (typeof a1 === 'number') return a1;
+      if (typeof a1 === 'number') { G.dropV1 = true; return a1; }
       if (a1 === false && !saveBroken) parkBroken(raw1);
       return 0;
     }, function () { return 0; });
@@ -1566,6 +1613,12 @@ var Audio2 = (function () {
         var f = 330 + Math.min(520, Math.log10(Math.max(1, value || 1)) * 130);
         blip('square', f, 0.07, 0.045);
       } else if (name === 'buy') blip('sine', 680, 0.1, 0.07, 980);
+      /* hold-to-buy: one short tick per purchase, a semitone higher each time,
+         so thirty purchases read as one rising run instead of thirty chimes */
+      else if (name === 'tick') {
+        var tf = 520 * Math.pow(2, Math.min(18, value || 0) / 12);
+        blip('sine', tf, 0.045, 0.045, tf * 1.12);
+      }
       else if (name === 'grow') { blip('sine', 88, 0.22, 0.14); blip('sine', 520, 0.34, 0.08, 1080); }
       else if (name === 'jack') {
         blip('sine', 660, 0.12, 0.08, 990);
@@ -1688,6 +1741,9 @@ function applyTheme() {
   P.glow = bg.glow;
   document.body.style.background =
     'linear-gradient(180deg,' + bg.top + ' 0%,' + bg.top + ' 38%,' + bg.bot + ' 100%)';
+  /* the pre-paint colour on <html> would otherwise keep the LAUNCH theme under
+     any area body does not cover (overscroll, a growing dynamic viewport) */
+  document.documentElement.style.background = bg.top;
   var meta = $('#themeColor');
   if (meta) meta.setAttribute('content', bg.top);
   /* the pre-paint hint in <head>: a second, SYNCHRONOUS copy of what the async
@@ -1871,6 +1927,16 @@ function resample(poly, count) {
 
 function easeOutQuart(t) { return 1 - Math.pow(1 - t, 4); }
 function easeOutBack(t) { var c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 3) + c * Math.pow(t - 1, 2); }
+/* No overshoot: a chained morph is one step of a longer swell, and an
+   overshoot on every step at 15 a second reads as a wobble, not growth. */
+function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
+/* The roll settle: easeOutQuart plus a short overshoot at the very end. One
+   function, because steering a roll mid-flight has to invert exactly this. */
+function rollEase(t) {
+  var e = easeOutQuart(t);
+  if (t > 0.9) e += Math.sin((t - 0.9) / 0.1 * Math.PI) * 0.012;
+  return e;
+}
 
 /* ---- canvas --------------------------------------------------------------- */
 
@@ -2092,8 +2158,10 @@ function drawDie(ctx, unitIndex, opts) {
   ctx.fillStyle = g;
   fillP();
 
-  /* face types are painted inside the shape, so a tint never escapes the die */
-  if (sides >= 3 && !opts.morphPts && (die.x2 > 0 || die.jack > 0)) {
+  /* face types are painted inside the shape, so a tint never escapes the die.
+     Also during a morph: the wedges are clipped to the interpolating outline,
+     and dropping them made every doubled face blink out for a whole hold. */
+  if (sides >= 3 && (die.x2 > 0 || die.jack > 0)) {
     ctx.save();
     clipP();
     var fv = polyPoints(sides, R, rot);          // one build for the whole loop
@@ -2161,14 +2229,21 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
   if (wide) {
     faces = (mode2 !== 'window' && opts.stampFace >= 0 && opts.stampFace < sides)
           ? [opts.stampFace] : [];
+    /* during a hold the landed face stays readable under the marker */
+    if (opts.quiet && mode2 !== 'window' && opts.landed >= 0 && opts.landed < sides &&
+        faces.indexOf(opts.landed) < 0) faces.push(opts.landed);
   }
   var edgeLen = sides >= 3 ? 2 * R * Math.sin(Math.PI / sides) : R;
 
   /* Ticks stand in for every face that has no numeral - but a doubled or
      jackpot face always gets its own, longer and in its own colour. Without
      that, every x2 the player buys past 13 sides was invisible: the wedge tint
-     is 3.6 degrees wide on a 100-gon and the numerals are gone. */
-  if (sides >= 3 && faces.length < sides && !wide) {
+     is 3.6 degrees wide on a 100-gon and the numerals are gone.
+     Ticks are drawn during a morph too. Past 13 sides a one-side step moves
+     each vertex by a fraction of an edge, so a tick on the new edge sits on
+     the swelling outline; hiding them turned a two-second hold on a 60-side
+     die into two seconds of a blank disc. */
+  if (sides >= 3 && faces.length < sides) {
     var step = mode2 === 'window' ? Math.ceil(sides / 40) : 1;
     var thin = Math.max(1, Math.min(2, R * 0.02));
     var thick = Math.max(1.6, Math.min(3.4, R * 0.035));
@@ -2197,6 +2272,11 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
                 Math.max(1.8, Math.min(4, R * 0.036)), 0, Math.PI * 2);
         ctx.fillStyle = tt === 'jack' ? P.gold : P.tint;
         ctx.fill();
+        /* an ink ring, so the pip reads on skins whose face is close to the
+           tint or the gold (dark JADE, dark EMBER, dark BONE) */
+        ctx.lineWidth = 1.2;
+        ctx.strokeStyle = sk.ink;
+        ctx.stroke();
       }
     }
     ctx.restore();
@@ -2222,7 +2302,7 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
       ctx.translate(px, py);
       ctx.rotate(rotText);
       ctx.scale(pop, pop);
-      ctx.globalAlpha = opts.labelAlpha;
+      ctx.globalAlpha = (opts.quiet && f === opts.landed) ? 1 : opts.labelAlpha;
       ctx.font = '600 ' + fs.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillStyle = sk.ink;
       ctx.fillText(THEME.faceLabel(f), 0, type === 'normal' ? 0 : -fs * 0.16);
@@ -2253,7 +2333,10 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
     if (opts.morphPts && opts.stampScale !== 1) {
       ctx.translate(0, wy); ctx.scale(opts.stampScale, opts.stampScale); ctx.translate(0, -wy);
     }
-    ctx.globalAlpha = opts.labelAlpha;
+    /* During a hold the window never fades: it counts the new top face up
+       41, 42, 43... with a small pulse per step, which is the whole purchase
+       said without a word. The numerals on the rim wait for the settle. */
+    ctx.globalAlpha = (opts.quiet || opts.fromHold) ? 1 : opts.labelAlpha;
     roundRect(ctx, -wWidth / 2, wy - wHeight / 2, wWidth, wHeight, wHeight * 0.28);
     ctx.fillStyle = type2 === 'jack' ? P.gold : type2 === 'x2' ? P.tint : sk.face2;
     ctx.fill();
@@ -2377,7 +2460,7 @@ function landResult(res) {
       t: 0,
       x: (a.x + b.x) / 2,
       y: Math.min(a.top, b.top) - 18,
-      text: (res.combo >= E.K.COMBO_MULT ? THEME.strings.triples : THEME.strings.doubles) +
+      text: (matched.length >= 3 ? THEME.strings.triples : THEME.strings.doubles) +
             ' ×' + res.combo
     };
     if (cue) buzz(18);
@@ -2465,15 +2548,25 @@ function payFeedback(res, delay) {
     }
     return;
   }
-  G.floatBudget = G.fastMode ? 0.125 : 0;
+  G.floatBudget = floatGap();
   spawnFloats(res.paid, res.types, delay);
+}
+
+/* Seconds before the next float may spawn. Every spawn is one float PER DIE
+   and each lives 0.7 s, so with two or three dice tapping plus a roller could
+   push past the 15-float ceiling and cut floats off mid-rise: the gap keeps
+   (dice x 0.7 s / gap) under 15. One die below the fast threshold is never
+   throttled. */
+function floatGap() {
+  var n = st.dice.length;
+  return Math.max(G.fastMode ? 0.125 : 0, n > 1 ? 0.05 * n : 0);
 }
 
 function flushMerged() {
   if (!G.merge) return;
   var m = G.merge;
   G.merge = null;
-  G.floatBudget = 0.125;
+  G.floatBudget = floatGap();
   spawnFloats(m.paid, m.types, 0);
   /* one cue for the whole merged batch, not one per landing */
   if (m.types.indexOf('jack') >= 0) {
@@ -2527,14 +2620,25 @@ function seedGeom() {
 
 function tryBuy(kind) {
   wake();
-  if (frozen() || G.panelOpen) return;
+  /* a quick second + SIDE tap inside the 700 ms settle is not dropped: it buys
+     and retargets the running morph from wherever it is, which check.js proves
+     happens without a jump */
+  if (G.panelOpen || (frozen() && kind !== 'side')) return;
   if (kind === 'recast') { openRecast(); return; }
   if (!E.canBuy(st, kind)) return;
   var before = maxRollNow();
   var info = E.buy(st, kind);
   if (!info) return;
-  if (kind === 'side') {
-    startMorph(info.unit, info.n);
+  if (kind === 'side' && G.morphs[info.unit]) {
+    /* a re-tap while this die is still growing: chain onto the swell with one
+       settle, like a hold step - no new freeze, no re-shake, so machine-gun
+       tapping never stretches the 700 ms freeze into a frozen stage */
+    startMorph(info.unit, info.n, true);
+    settleMorph(info.unit);
+    Audio2.play('tick', 0);
+    buzz(6);
+  } else if (kind === 'side') {
+    startMorph(info.unit, info.n, false);
     Audio2.play('grow');
     buzz([12, 30, 18]);
     G.shake = 0.22;
@@ -2543,17 +2647,14 @@ function tryBuy(kind) {
     Audio2.play(kind === 'jack' ? 'jack' : 'buy');
     buzz(14);
     G.shake = 0.1;
-    if (kind === 'unit') { unitAnim(st.dice.length - 1).rot = 0; seedGeom(); }
-    if (kind === 'jack' || kind === 'tier3') G.sparkle = 0.7;
-    /* Once each, the first time a special face is ever bought: the die now
-       carries a coloured pip the player has never seen, and nothing else on
-       screen says which mark belongs to which purchase. After that the pip and
-       the float colour carry it on their own. */
-    if (kind === 'x2' && info.k === 1) {
-      notice('Blue faces pay ×' + st.dice[info.unit].tier + '. Watch for the blue pip on the rim.');
-    } else if (kind === 'jack' && info.tier === 1) {
-      notice('The gold face pays ×' + E.jackMult(1) + ' the die average. It is face 1, marked gold.');
+    if (kind === 'unit') {
+      /* morph outlines are stored at the old dice count's radius; a settle
+         still running would draw its die ~39% too big in the narrower slot */
+      for (var mi = 0; mi < G.morphs.length; mi++) G.morphs[mi] = null;
+      unitAnim(st.dice.length - 1).rot = 0; seedGeom();
     }
+    if (kind === 'jack' || kind === 'tier3') G.sparkle = 0.7;
+    firstFaceNotice(kind, info);
   }
   G.maxRollTarget = maxRollNow();
   if (G.maxRollTarget !== before) G.maxRollTick = 0.7;
@@ -2562,45 +2663,292 @@ function tryBuy(kind) {
   wake();
 }
 
-function startMorph(unitIndex, newSides) {
+/* Once each, the first time a special face is ever bought: the die now carries
+   a coloured pip the player has never seen, and nothing else on screen says
+   which mark belongs to which purchase. After that the pip and the float colour
+   carry it on their own. */
+function firstFaceNotice(kind, info) {
+  if (kind === 'x2' && info.k === 1) {
+    notice('Blue faces pay ×' + st.dice[info.unit].tier + '. Watch for the blue pip on the rim.');
+  } else if (kind === 'jack' && info.tier === 1) {
+    notice('The gold face pays ×' + E.jackMult(1) + ' the die average. It is face 1, marked gold.');
+  }
+}
+
+/* ---- the + SIDE morph -----------------------------------------------------
+   One morph per die, stored UNSCALED and in the die's own frame: draw() scales
+   it by fitScale and turns it by whatever rotation the die has right now, so a
+   die can keep rolling - or spinning in fast mode - while it grows.
+
+   Chained morphs. A purchase that lands on a die which is already morphing
+   never restarts from the old side count and never snaps: the new morph starts
+   from the outline as it is drawn at this instant and heads for the new one.
+   Thirty purchases in two seconds are one continuous swell. */
+var MORPH_PTS = 240;
+
+function morphEase(mo, t) { return mo.ease === 'back' ? easeOutBack(t) : easeOutCubic(t); }
+
+/* The outline as it is being drawn right now, unscaled and unrotated. */
+function morphNow(mo) {
+  var e = morphEase(mo, Math.min(1, mo.t)), out = new Array(mo.from.length), q, a, b;
+  /* the settle's swell lives here, so a morph chained off a swelling settle
+     still starts exactly where it was drawn: 0 at both ends, +5% mid-way */
+  var sw = mo.swell ? 1 + 0.05 * Math.sin(Math.PI * Math.min(1, mo.t)) : 1;
+  for (q = 0; q < mo.from.length; q++) {
+    a = mo.from[q]; b = mo.to[q];
+    out[q] = [(a[0] + (b[0] - a[0]) * e) * sw, (a[1] + (b[1] - a[1]) * e) * sw];
+  }
+  return out;
+}
+
+function rotatePts(pts, ang) {
+  if (!ang) return pts;
+  var c = Math.cos(ang), s = Math.sin(ang), out = new Array(pts.length), q;
+  for (q = 0; q < pts.length; q++) {
+    out[q] = [pts[q][0] * c - pts[q][1] * s, pts[q][0] * s + pts[q][1] * c];
+  }
+  return out;
+}
+
+function anyMorph() {
+  for (var i = 0; i < G.morphs.length; i++) if (G.morphs[i]) return true;
+  return false;
+}
+
+/* A roll in flight when its die grows was aimed at face k of the OLD shape and
+   would land tilted on the new one. Re-aim the end of the tween by the angle
+   between the two, and move its start so the rotation drawn THIS frame does not
+   change: from + (to - from) * e must still equal rot. */
+function steerRoll(an, shift) {
+  if (!shift) return;
+  var e = rollEase(an.t), to2 = an.to + shift;
+  if (1 - e > 1e-3) an.from = (an.rot - to2 * e) / (1 - e);
+  else an.from += shift;
+  an.to = to2;
+}
+
+/* Keeps the die's rotation honest across a side purchase and returns the
+   outline the new morph should start from, in the frame it will be drawn in. */
+function rebaseForGrowth(unitIndex, newSides, cur, hadMorph) {
+  var an = unitAnim(unitIndex), oldSides = newSides - 1;
+  if (G.fastMode) {                       // spin phase drives rot; nothing to steer
+    if (an.snap > 0) an.snapRot = rotationFor(newSides, an.index);
+    return cur;
+  }
+  if (an.t < 1) {                         // mid-roll: land flat on the NEW shape
+    steerRoll(an, rotationFor(newSides, an.index) - rotationFor(oldSides, an.index));
+    return cur;
+  }
+  if (!hadMorph) {
+    /* At rest on a settled polygon: keep the landed face under the marker (the
+       x2 / jackpot wedges and pips are drawn through the morph, so going back
+       to face 0 made them jump) and carry the outline round by the difference
+       so this frame draws exactly what the last one did. */
+    var base = rotationFor(newSides, an.index), old = an.rot;
+    an.rot = base + Math.round((old - base) / (2 * Math.PI)) * 2 * Math.PI;
+    an.snap = 0;
+    return rotatePts(cur, old - an.rot);
+  }
+  /* At rest mid-swell: the outline is between two shapes and not symmetric, so
+     rotation is NOT free. Take the new shape's nearest flat and carry the
+     outline round by the same small angle, at most half a face. */
+  var step = 2 * Math.PI / Math.max(1, newSides);
+  var q = Math.round(an.rot / step), after = q * step, d = after - an.rot;
+  an.rot = after;
+  an.index = newSides > 1 ? ((-q % newSides) + newSides) % newSides : 0;
+  an.snap = 0;
+  return rotatePts(cur, -d);
+}
+
+/* `chain` is true for a hold-to-buy purchase: a short no-overshoot step, no
+   ring, numerals held back until the settle. A tap is the full 600 ms money
+   shot, exactly as before. */
+function startMorph(unitIndex, newSides, chain) {
   var count = st.dice.length;
-  var oldSides = newSides - 1;
-  var R0 = radiusFor(oldSides, count), R1 = radiusFor(newSides, count);
-  G.morph = {
-    unit: unitIndex,
+  var prev = G.morphs[unitIndex];
+  var cur = prev ? morphNow(prev)
+                 : resample(outline(newSides - 1, radiusFor(newSides - 1, count)), MORPH_PTS);
+  G.morphs[unitIndex] = {
     t: 0,
-    dur: 0.6,
-    from: resample(outline(oldSides, R0), 240),
-    to: resample(outline(newSides, R1), 240),
-    d0: bottomOf(oldSides, R0, 0),
-    d1: bottomOf(newSides, R1, 0),
+    dur: chain ? HOLD.MORPH_S : HOLD.SETTLE_S,
+    ease: chain ? 'out' : 'back',
+    quiet: !!chain,
+    hold: !!chain,                        // parked at t=1 until the hold ends
+    from: rebaseForGrowth(unitIndex, newSides, cur, !!prev),
+    to: resample(outline(newSides, radiusFor(newSides, count)), MORPH_PTS),
     newFace: newSides - 1
   };
-  var an = unitAnim(unitIndex);
-  an.rot = 0; an.t = 1; an.index = 0; an.snap = 0;
+}
+
+/* The single flourish at the end of a hold: from wherever the swell is, a
+   600 ms easeOutBack onto the final shape, with the ring, the stamp and the
+   numerals fading back in. */
+function settleMorph(unitIndex) {
+  var mo = G.morphs[unitIndex];
+  if (!mo) return;
+  /* from exactly wherever the swell is drawn, so the first frame never jumps.
+     The last chained step has usually parked on its target already, so the
+     flourish is a separate +5% swell-and-return (mo.swell, in morphNow) */
+  mo.from = morphNow(mo);
+  mo.swell = true;
+  mo.fromHold = true;                     // the value window never blinks out
+  mo.t = 0;
+  mo.dur = HOLD.SETTLE_S;
+  mo.ease = 'back';
+  mo.quiet = false;
+  mo.hold = false;
+}
+
+/* ---- hold to buy ----------------------------------------------------------
+   Press and hold a repeatable card and it keeps buying: the first repeat at
+   DELAY_MS, then RATE_START a second ramping linearly to RATE_END over
+   RAMP_MS. A tap still buys exactly one, on release. Presentation state only -
+   every purchase is an ordinary E.buy and every number still comes from ECON. */
+var HOLD = {
+  DELAY_MS: 350,
+  RATE_START: 4,          // purchases per second when the repeat begins
+  RATE_END: 15,           // ... and after RAMP_MS of holding
+  RAMP_MS: 2000,
+  MAX_PER_FRAME: 3,       // a stalled frame never dumps a backlog of purchases
+  HAPTIC_GAP_MS: 84,      // at most ~12 buzzes a second
+  TICK_GAP_MS: 60,        // at most ~16 ticks a second
+  MORPH_S: 0.2,           // one chained step of the swell
+  SETTLE_S: 0.6,          // the money shot, and the flourish that ends a hold
+  SLIDE_PX: 12,           // before the repeat starts, sliding this far cancels
+  KINDS: { side: true, x2: true, jack: true, roller: true }
+};
+
+/* One live press across the whole shop, so a second finger can never start a
+   second repeater or buy something else under the first. */
+var shopPress = null;
+
+function holdRate(ms) {
+  var k = Math.max(0, Math.min(1, ms / HOLD.RAMP_MS));
+  return HOLD.RATE_START + (HOLD.RATE_END - HOLD.RATE_START) * k;
+}
+
+function beginHold(kind, press) {
+  if (!HOLD.KINDS[kind] || G.hold) return;
+  var t = (kind === 'x2' || kind === 'jack') ? E.targetFor(st, kind) : null;
+  G.hold = { kind: kind, press: press, node: shopNodes[kind].root,
+             t0: performance.now(), live: false, liveAt: 0, next: 0, count: 0,
+             unit: t ? t.unit : -1 };
+}
+
+/* One purchase from the repeater. False means stop: out of coins, the card has
+   left the shop or locked, or an x2 / jackpot card now points at another die. */
+function repeatBuy(h) {
+  var n = shopNodes[h.kind];
+  if (!n || n.root.hidden || n.root.classList.contains('locked')) return false;
+  if (G.panelOpen || !E.canBuy(st, h.kind)) return false;
+  if (h.unit >= 0) {
+    var t = E.targetFor(st, h.kind);
+    if (!t || t.unit !== h.unit) return false;
+  }
+  var info = E.buy(st, h.kind);
+  if (!info) return false;
+  h.count += 1;
+  /* only a hold that actually bought something swallows the release: a slow
+     tap on a card that was a few coins short still buys one when it lifts */
+  if (h.press) h.press.repeated = true;
+  if (h.kind === 'side') startMorph(info.unit, info.n, true);
+  else if (h.kind === 'jack' && G.sparkle < 0.2) G.sparkle = 0.5;   // merged glints
+  firstFaceNotice(h.kind, info);
+  var now = performance.now();
+  if (now - G.lastTick >= HOLD.TICK_GAP_MS) { G.lastTick = now; Audio2.play('tick', h.count - 1); }
+  if (now - G.lastBuzz >= HOLD.HAPTIC_GAP_MS) { G.lastBuzz = now; buzz(6); }
+  markDirty();
+  refreshShop();
+  return true;
+}
+
+/* Runs every frame from update(). The loop stays awake while a hold exists. */
+function holdStep() {
+  var h = G.hold;
+  if (!h) return;
+  if (G.panelOpen) { endHold(true); return; }
+  var now = performance.now();
+  if (!h.live) {
+    if (now - h.t0 < HOLD.DELAY_MS) return;
+    h.live = true;
+    h.liveAt = now;
+    h.next = now;
+    h.node.classList.add('holding');
+    G.freezeUntil = 0;                      // no 700 ms freeze while repeating
+  }
+  var n = 0;
+  while (now >= h.next && n < HOLD.MAX_PER_FRAME) {
+    n += 1;
+    if (!repeatBuy(h)) { endHold(true); return; }
+    h.next += 1000 / holdRate(h.next - h.liveAt);
+  }
+  if (now - h.next > 250) h.next = now;     // never bank a backlog after a stall
+}
+
+/* Stops the repeater. With `settle`, and if it bought anything, plays the one
+   flourish the whole hold earned: the settle morph, one grow chord, one shake. */
+function endHold(settle) {
+  var h = G.hold;
+  if (!h) return;
+  G.hold = null;
+  h.node.classList.remove('holding');
+  var i, grew = false;
+  for (i = 0; i < G.morphs.length; i++) {
+    if (G.morphs[i] && G.morphs[i].hold) { grew = true; settleMorph(i); }
+  }
+  if (!settle || h.count === 0) return;
+  if (grew) {
+    Audio2.play('grow');
+    buzz([12, 30, 18]);
+    G.shake = 0.16;
+  } else {
+    Audio2.play(h.kind === 'jack' ? 'jack' : 'buy');
+    buzz(14);
+    G.shake = 0.08;
+  }
+  save();
+  refreshShop();
+  wake();
 }
 
 /* ---- recast --------------------------------------------------------------- */
 
 function openRecast() {
   if (!E.unlocked(st, 'recast')) return;
-  var gain = E.shardsFor(st);
-  var newM = E.globalMult(st.shards + gain);
-  $('#recastKeep').innerHTML =
-    'You keep <b>' + (st.shards + gain) + ' shards</b><br>' +
-    'Payout multiplier <b>×' + E.globalMult(st.shards).toFixed(2) + ' → ×' + newM.toFixed(2) + '</b><br>' +
-    'Die slots owned <b>' + st.slots + '</b><br>' +
-    'Skins and set bonuses <b>all kept</b><br>' +
-    'Roller <b>Lv ' + Math.max(0, st.roller) + ' → Lv ' + Math.max(0, Math.floor(st.roller / 2)) + '</b>';
-  $('#recastCost').textContent =
-    'Every die goes back to one side, and its doubled and jackpot faces go with it. ' +
-    'This run earned ' + E.fmt(st.runCoins) + ', worth ' + gain + ' shards' +
-    (E.shardsMaxedAt(st) > E.recastThreshold(st)
-      ? '. The shard payout stops growing at ' + E.fmt(E.shardsMaxedAt(st)) +
-        ' this run, so waiting past that pays nothing extra.'
-      : ' - every run is worth the same ' + E.K.SHARD_COEF +
-        ', so waiting pays nothing extra.');
+  /* Show, don't tell: the multiplier change is the hero, then one row of what
+     stays and one of what goes, as icons and numbers. The "after" numbers come
+     from running ECON's own recast on a copy, so the screen shows exactly what
+     the button will do and cannot drift from it. */
+  var after = E.clone(st);
+  var gain = E.recast(after);
+  $('#rcRun').textContent = 'RUN ' + (st.recasts + 1) + '/' + E.K.MAX_RECASTS;
+  $('#rcFrom').textContent = '×' + E.runMult(st).toFixed(2);
+  $('#rcTo').textContent = '×' + E.runMult(after).toFixed(2);
+  $('#rcGain').innerHTML = RC_ICON.shard + '<span>+' + gain + '</span>';
+  var roller = st.roller >= 0
+    ? rcChip(RC_ICON.roller, 'Lv' + (st.roller + 1) + '→' + (after.roller + 1)) : '';
+  $('#rcKeep').innerHTML = '<span class="rc-tag">KEEP</span>' +
+    rcChip(RC_ICON.shard, String(after.shards)) +
+    rcChip(RC_ICON.die, '×' + after.slots) +
+    roller +
+    rcChip(RC_ICON.skin, '');
+  $('#rcReset').innerHTML = '<span class="rc-tag">RESET</span>' +
+    rcChip(RC_ICON.die, '1') +
+    rcChip(RC_ICON.coin, '0') +
+    rcChip('', '×2 ★');
   openPanel('#recastPanel');
+}
+
+var RC_ICON = {
+  shard: '<svg viewBox="0 0 16 16"><path d="M8 1.6 14 6.2 8 14.4 2 6.2Z M2 6.2h12"/></svg>',
+  die: '<svg viewBox="0 0 16 16"><path d="M8 1.8 13.4 4.9v6.2L8 14.2 2.6 11.1V4.9Z"/></svg>',
+  roller: '<svg viewBox="0 0 16 16"><path d="M2.5 2.5h11v11h-11z M6.2 2.5v11 M9.8 2.5v11"/></svg>',
+  skin: '<svg viewBox="0 0 24 24"><path d="M12 3a9 9 0 1 0 0 18c1.2 0 1.9-.8 1.9-1.7 0-.5-.2-.9-.5-1.2-.3-.3-.5-.7-.5-1.1 0-.9.8-1.7 1.8-1.7H16a5 5 0 0 0 5-5c0-4-4-7.3-9-7.3z"/><circle cx="7.6" cy="12.4" r="1.1"/><circle cx="9.9" cy="8.2" r="1.1"/><circle cx="14.6" cy="7.8" r="1.1"/></svg>',
+  coin: '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="5.8"/><path d="M8 5v6"/></svg>'
+};
+
+function rcChip(icon, text) {
+  return '<span class="rc-chip">' + icon + (text ? '<span>' + text + '</span>' : '') + '</span>';
 }
 
 function doRecast() {
@@ -2839,25 +3187,58 @@ function buildShop() {
        behaves. Buying on pointerdown meant a thumb brushing the shop on its way
        to the die bought whatever it touched - and RECAST, irreversible and
        capped at three uses, sits in that stack. */
-    var press = null;
+    /* Holding a repeatable card starts the repeater (see HOLD). The press is
+       shared across the whole shop, so a second finger is simply ignored. */
+    var outside = function (ev) {
+      var r = b.getBoundingClientRect();
+      return ev.clientX < r.left || ev.clientX > r.right ||
+             ev.clientY < r.top || ev.clientY > r.bottom;
+    };
+    var mine = function (ev) { return shopPress && shopPress.node === b && shopPress.id === ev.pointerId; };
+    var drop = function (ev) {
+      if (!mine(ev)) return;
+      shopPress = null;
+      endHold(true);
+      refreshShop();                        // the pinned card may now re-sort
+    };
     b.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0) return;          // right or middle button never buys
       ev.preventDefault();
       Audio2.unlock();
-      press = { id: ev.pointerId, x: ev.clientX, y: ev.clientY };
+      if (shopPress) return;
+      shopPress = { id: ev.pointerId, node: b, kind: item.kind, x: ev.clientX, y: ev.clientY,
+                    cancelled: false, repeated: false };
       try { b.setPointerCapture(ev.pointerId); } catch (e) {}
+      if (!G.panelOpen) beginHold(item.kind, shopPress);
+      wake();
+    });
+    b.addEventListener('pointermove', function (ev) {
+      if (!mine(ev)) return;
+      var p = shopPress;
+      if (G.hold && G.hold.live) {
+        /* once it is repeating, only leaving the card stops it: a thumb held
+           for two seconds drifts a few pixels and that is not a cancel */
+        if (outside(ev)) { p.cancelled = true; endHold(true); }
+      } else if (!p.cancelled && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > HOLD.SLIDE_PX) {
+        p.cancelled = true;                 // the 12 px slide-off cancel
+        endHold(false);
+      }
     });
     b.addEventListener('pointerup', function (ev) {
-      var p = press;
-      press = null;
-      if (!p || p.id !== ev.pointerId) return;
-      if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > 12) return;
-      var r = b.getBoundingClientRect();
-      if (ev.clientX < r.left || ev.clientX > r.right ||
-          ev.clientY < r.top || ev.clientY > r.bottom) return;
+      if (!mine(ev)) return;
+      var p = shopPress;
+      shopPress = null;
+      endHold(true);
+      refreshShop();                        // the pinned card may now re-sort
+      if (p.cancelled || p.repeated) return;  // a hold never buys one more on release
+      if (Math.hypot(ev.clientX - p.x, ev.clientY - p.y) > HOLD.SLIDE_PX) return;
+      if (outside(ev)) return;
       tryBuy(item.kind);
     });
-    b.addEventListener('pointercancel', function () { press = null; });
-    b.addEventListener('pointerleave', function () { press = null; });
+    b.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    b.addEventListener('pointercancel', drop);
+    b.addEventListener('pointerleave', drop);
+    b.addEventListener('lostpointercapture', drop);
     b.hidden = true;
     b.style.order = item.order;
     wrap.appendChild(b);
@@ -2992,10 +3373,18 @@ function refreshShop() {
     if (states[MIDDLE[i]].show) mids.push(MIDDLE[i]);
   }
   mids.sort(function (a, b) { return states[a].cost - states[b].cost; });
-  var keep = {};
+  var keep = {}, kept = 0;
   keep.side = true;
   keep.recast = true;
-  for (i = 0; i < mids.length && i < 2; i++) keep[mids[i]] = true;
+  /* the card under the finger stays until release, so the shop never swaps
+     another card in under the thumb - pinned by the live PRESS, not the
+     repeater, because a hold that stops for funds or a retarget ends the
+     repeater while the finger is still down */
+  var pk = shopPress ? shopPress.kind : G.hold ? G.hold.kind : null;
+  if (pk && mids.indexOf(pk) >= 0) { keep[pk] = true; kept = 1; }
+  for (i = 0; i < mids.length && kept < 2; i++) {
+    if (!keep[mids[i]]) { keep[mids[i]] = true; kept++; }
+  }
 
   SHOP.forEach(function (item) {
     var n = shopNodes[item.kind];
@@ -3185,7 +3574,7 @@ function wake() {
 
 function busy() {
   if (st.roller >= 0) return true;
-  if (G.floats.length || G.particles.length || G.morph || G.shake > 0) return true;
+  if (G.floats.length || G.particles.length || anyMorph() || G.hold || G.shake > 0) return true;
   if (G.maxRollTick > 0 || G.pendingLand || G.burst || G.sparkle > 0 || G.merge) return true;
   if (Math.abs(G.shownCoins - st.coins) > 0.5) return true;
   var i;
@@ -3206,6 +3595,9 @@ function frame(now) {
 
 function update(dt) {
   var i, j;
+
+  /* The repeater runs first, so a purchase made this frame is drawn this frame. */
+  holdStep();
 
   if (G.floatBudget > 0) {
     G.floatBudget = Math.max(0, G.floatBudget - dt);
@@ -3244,6 +3636,17 @@ function update(dt) {
       }
       if (last && n > 1) last.feed = feed;
       var quiet = frozen() || G.panelOpen;
+      if (quiet && last && !G.panelOpen) {
+        /* the + SIDE freeze holds the float back, never drops it: merged and
+           shown the moment the freeze ends */
+        if (!G.merge) G.merge = { paid: [], types: [], total: 0 };
+        for (fj = 0; fj < feed.paid.length; fj++) {
+          G.merge.paid[fj] = (G.merge.paid[fj] || 0) + feed.paid[fj];
+          G.merge.total += feed.paid[fj];
+          G.merge.types[fj] = bestType(G.merge.types[fj], feed.types[fj]);
+        }
+        G.floatBudget = Math.max(G.floatBudget, G.freezeUntil - clock(), 0.01);
+      }
       if (!quiet && last) {
         flushLand();                                // never drop an unpaid throw
         G.lastResult = last;
@@ -3290,18 +3693,21 @@ function update(dt) {
     var a = G.anims[i];
     if (a.t < 1) {
       a.t = Math.min(1, a.t + dt / a.dur);
-      var e = easeOutQuart(a.t);
-      if (a.t > 0.9) e += Math.sin((a.t - 0.9) / 0.1 * Math.PI) * 0.012;
-      a.rot = a.from + (a.to - a.from) * e;
+      a.rot = a.from + (a.to - a.from) * rollEase(a.t);
       if (a.t >= 1 && i === 0) flushLand();
     }
     if (a.flash > 0) a.flash = Math.max(0, a.flash - dt);
     if (a.glow > 0) a.glow = Math.max(0, a.glow - dt);
   }
 
-  if (G.morph) {
-    G.morph.t += dt / G.morph.dur;
-    if (G.morph.t >= 1) G.morph = null;
+  /* A chained step parks at t=1 while its hold is still live, so the die sits
+     on its newest shape with the numerals held back; endHold() turns it into
+     the settle. Everything else ends when it lands. */
+  for (i = 0; i < G.morphs.length; i++) {
+    var mo = G.morphs[i];
+    if (!mo) continue;
+    mo.t = Math.min(1, mo.t + dt / mo.dur);
+    if (mo.t >= 1 && !(mo.hold && G.hold)) G.morphs[i] = null;
   }
   if (G.burst) {
     G.burst.t += dt / 0.5;
@@ -3356,6 +3762,9 @@ function refreshHot() {
   chip.classList.toggle('show', s !== 'hidden');
   chip.classList.toggle('armed', s === 'ready');
   chip.classList.toggle('live', s === 'live');
+  chip.classList.toggle('cooling', s === 'cooling');
+  if (s === 'cooling') chip.setAttribute('aria-disabled', 'true');
+  else chip.removeAttribute('aria-disabled');
   if (s === 'live') {
     var left = hotLeftMs() / 1000;
     /* the name and the effect stay paired: dropping "HOT HAND" the moment it
@@ -3364,7 +3773,9 @@ function refreshHot() {
     var frac = Math.max(0, Math.min(1, left / E.K.HOT_DURATION_S));
     $('#hotRing').setAttribute('stroke-dashoffset', (33.93 * (1 - frac)).toFixed(2));
   } else if (s === 'cooling') {
-    setText($('#hotText'), THEME.strings.hot + ' · ' + E.fmtTime((st.hotReadyAt - Date.now()) / 1000));
+    /* no "×3" while cooling: next to a timer it read as a buff still running */
+    setText($('#hotText'), THEME.strings.hot + ' ↻ ' +
+                           E.fmtTime((st.hotReadyAt - Date.now()) / 1000));
   } else {
     setText($('#hotText'), THEME.strings.hotOffer(E.K.HOT_MULT, E.K.HOT_DURATION_S));
   }
@@ -3427,21 +3838,26 @@ function draw() {
 
     var depth = bottomOf(sides, R, rot);
     var morphPts = null;
+    var mo = G.morphs[i] || null;
 
-    if (G.morph && G.morph.unit === i) {
-      var t = Math.min(1, G.morph.t);
-      var e = easeOutBack(t);
-      morphPts = [];
-      for (var q = 0; q < G.morph.from.length; q++) {
-        morphPts.push([
-          (G.morph.from[q][0] + (G.morph.to[q][0] - G.morph.from[q][0]) * e) * scale,
-          (G.morph.from[q][1] + (G.morph.to[q][1] - G.morph.from[q][1]) * e) * scale
-        ]);
+    /* The morph is drawn at the die's CURRENT rotation, so a die keeps rolling
+       (or spinning, in fast mode) while it grows, and its contact depth is
+       read off the outline actually being drawn - it rides the ground line
+       through every intermediate shape. */
+    if (mo) {
+      var cur = morphNow(mo);
+      var mc = Math.cos(rot), ms = Math.sin(rot), low = -Infinity, ux, uy, py2;
+      morphPts = new Array(cur.length);
+      for (var q = 0; q < cur.length; q++) {
+        ux = cur[q][0] * scale; uy = cur[q][1] * scale;
+        py2 = ux * ms + uy * mc;
+        morphPts[q] = [ux * mc - uy * ms, py2];
+        if (py2 > low) low = py2;
       }
-      depth = (G.morph.d0 + (G.morph.d1 - G.morph.d0) * e) * scale;
-      rot = 0;
-      labels = true;
+      depth = low;
     }
+    var mt = mo ? Math.min(1, mo.t) : 1;
+    var fadeIn = mo ? Math.max(0, (mt - 0.55) / 0.45) : 1;
 
     var y = gy - depth;
     var g = dieGeom(i);
@@ -3470,19 +3886,25 @@ function draw() {
       die: die, sides: sides, R: R, rot: rot, x: x, y: y,
       sx: squash, sy: squashY,
       landed: an.index, flash: an.flash, glow: an.glow,
-      pulse: !!sideTgt && sideTgt.unit === i && !G.morph,
+      pulse: !!sideTgt && sideTgt.unit === i && !anyMorph(),
       time: G.now,
       labels: labels,
-      labelAlpha: morphPts ? Math.max(0, (G.morph.t - 0.55) / 0.45) : 1,
-      stampFace: G.morph && G.morph.unit === i ? G.morph.newFace : -1,
-      stampScale: morphPts ? 1.6 - 0.6 * Math.min(1, Math.max(0, (G.morph.t - 0.55) / 0.45)) : 1,
+      /* numerals stamp when the shape settles: a chained step keeps them out,
+         the settle fades them in and pops the new top face 1.6x -> 1.0 */
+      labelAlpha: mo ? (mo.quiet ? 0 : fadeIn) : 1,
+      stampFace: mo ? mo.newFace : -1,
+      stampScale: mo ? (mo.quiet ? 1 + 0.14 * (1 - mt)
+                               : mo.fromHold ? 1.25 - 0.25 * fadeIn : 1.6 - 0.6 * fadeIn) : 1,
+      quiet: !!(mo && mo.quiet),
+      fromHold: !!(mo && mo.fromHold),
       morphPts: morphPts,
       spin: 0,
       ghost: false
     };
 
-    /* motion ghosts: three while settling, a symmetric blur while spinning */
-    if (an.t < 1 && !G.fastMode && !morphPts) {
+    /* motion ghosts: three while settling, a symmetric blur while spinning -
+       and a growing die keeps them, because it keeps rolling */
+    if (an.t < 1 && !G.fastMode) {
       for (var gI = 1; gI <= 3; gI++) {
         cx.save();
         cx.globalAlpha = 0.09;
@@ -3490,7 +3912,7 @@ function draw() {
         cx.restore();
       }
     }
-    if (G.fastMode && !morphPts) {
+    if (G.fastMode) {
       cx.save();
       cx.globalAlpha = 0.13;
       drawDie(cx, i, Object.assign({}, opts, { spin: 0.16, ghost: true }));
@@ -3510,11 +3932,13 @@ function draw() {
     cx.fillStyle = an.flash > 0 ? P.fg : P.accent;
     cx.fill();
 
-    if (G.morph && G.morph.unit === i && G.morph.t < 1) {
+    /* the expanding ring belongs to the money shot only: a tap, or the one
+       settle that ends a hold - never to each chained step */
+    if (mo && !mo.quiet && mo.t < 1) {
       cx.save();
-      cx.globalAlpha = 1 - G.morph.t;
+      cx.globalAlpha = 1 - mo.t;
       cx.beginPath();
-      cx.arc(x, y, R * (0.9 + G.morph.t * 0.9), 0, Math.PI * 2);
+      cx.arc(x, y, R * (0.9 + mo.t * 0.9), 0, Math.PI * 2);
       cx.lineWidth = 3;
       cx.strokeStyle = P.gold;
       cx.stroke();
@@ -3675,6 +4099,13 @@ function buildDev() {
       for (i = 0; i < 20; i++) { t = E.sideTarget(st); if (!t) break; st.dice[t.unit].n += 1; }
       G.maxRollTarget = G.maxRollShown = maxRollNow();
     }],
+    ['+DIE', function () {
+      if (st.slots >= E.K.MAX_DICE) return;
+      st.dice.push(E.newDie()); st.slots = st.dice.length;
+      for (var mi = 0; mi < G.morphs.length; mi++) G.morphs[mi] = null;
+      seedGeom();
+      G.maxRollTarget = G.maxRollShown = maxRollNow();
+    }],
     ['OFFLINE 2H', function () { handleReturn(7200); }],
     /* Seeds a v1 save and reloads, so the migration path can actually be
        exercised on a device that has never had a v1 save on it. */
@@ -3782,6 +4213,8 @@ function start(away) {
   addEventListener('orientationchange', sizeCanvas);
   addEventListener('visibilitychange', function () {
     if (document.hidden) {
+      shopPress = null;                 // a backgrounded hold never resumes buying
+      endHold(true);
       save();
       hiddenPerf = performance.now();
       if (G.raf) { cancelAnimationFrame(G.raf); G.raf = 0; }

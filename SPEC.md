@@ -21,7 +21,7 @@
 - **0:09 FIRST PURCHASE.** Squash, split to a lens, a `2` stamps on the new edge, 6px shake, coin burst, thunk + rising chime, all other UI frozen 700 ms. `MAX ROLL 1 → 2`.
 - **0:09–0:36** Sides 3, 4, 5, 6 arrive every ~6 s (cost rises 16%/side, income rises ~15%/side — the early drip is deliberately near-flat).
 - **~0:36** Six sides. It reads as a die: 1,2,3,4,5,6. No copy says so.
-- **0:40–1:10** At 8 sides the **`×2 SIDE`** card lights (120). Buy it: the top face tints and grows a small `×2` tag. Next landing on it pays double and the float is tinted to match.
+- **0:40–1:10** At 9 sides the **`×2 SIDE`** card lights (120). Buy it: the top face tints and grows a small `×2` tag. Next landing on it pays double and the float is tinted to match.
 - **1:10–2:00** `ROLLER — 600` appears; the player mashes toward it, sides 9–11 land on the way.
 
 ---
@@ -31,14 +31,14 @@
 1. **THE DIE (t=0).** `die = { n, x2, tier, jack }`. Faces are `1..n`. A roll picks a uniform index `i ∈ [0,n)` and pays `faceValue(die, i)`.
 2. **+ SIDE** (at 6 coins lifetime). Appends face `n+1`. Auto-targets the die with fewest sides — falling through to the next-smallest when growing the smallest one would *lower* income, which happens only at the `COMBO_MIN_SIDES` crossing. Never a choice. `MAX_SIDES = 100`.
 3. **MAX ROLL readout** (t=0). One line under the dice, ticks up on every purchase.
-4. **×2 SIDE** (at 8 sides on the target die). Each purchase doubles **one more face, highest first**: purchase `k` doubles face `n−k+1`. Cap `X2_MAX = 12` per die. Doubled faces are tinted and carry a small `×2` tag.
+4. **×2 SIDE** (at 9 sides on the target die; was 8, see A14). Each purchase doubles **one more face, highest first**: purchase `k` doubles face `n−k+1`. Cap `X2_MAX = 12` per die. Doubled faces are tinted and carry a small `×2` tag.
 5. **ROLLER** (at 6 sides). Global auto-roll, L0–L11, L0 = 2.0 rolls/s. Manual taps still throw on a 100 ms cooldown. Survives Recast at half level.
 6. **JACKPOT SIDE** (at 12 sides on that die **and** roller owned). Face index 0 — the die's `1` — becomes the jackpot: **gold with a star**. It pays `JACK_MULT(t) × (n+1)/2`. Further purchases raise `t`; **there is never a second jackpot face.** Tier `t` requires `n ≥ JACK_MULT(t)/3` sides on that die, so the jackpot grows with the die and the card greys out reading `NEEDS <x> SIDES` rather than silently underpaying.
 7. **×3 TIER** (when a die has all 12 ×2 faces). One purchase per die; every doubled face becomes `×3`, tag changes to `×3`. One card, no sub-menu.
 8. **+ DIE** (10 sides on die 1 **and** roller L2). New die born at one side. Cap **3**.
-9. **DOUBLES / TRIPLES** (auto, from 2 dice, dice with `n ≥ 6` only). Landed numbers equal: all → `×3`, exactly a pair → `×2`. **No connecting line.** The matched dice glow, a `DOUBLES ×2` / `TRIPLES ×3` tag bursts at the midpoint between them for 500 ms, and *then* the per-die floats rise showing the already-multiplied amounts.
+9. **DOUBLES / TRIPLES** (auto, from 2 dice, dice with `n ≥ 6` only). Landed numbers equal: three dice → `×3`, any pair → `×2` (so with two dice a match is always `DOUBLES ×2`; appendix A13). **No connecting line.** The matched dice glow, a `DOUBLES ×2` / `TRIPLES ×3` tag bursts at the midpoint between them for 500 ms, and *then* the per-die floats rise showing the already-multiplied amounts.
 10. **SKINS** (first skin affordable). One panel, one grid: 3 die skins × 3 backgrounds. Slot 1 of each is owned from the start. Buy with coins, equip freely, **own all 3 in a category → permanent +10% income**, printed on the panel row. Skins and their bonus survive Recast.
-11. **HOT HAND** (rewarded). Chip reads what it does *before* use: `HOT HAND ×3 · 2:00`. While active: countdown ring on the chip, a `×3` badge above the dice, and every float tinted hot-orange.
+11. **HOT HAND** (rewarded). Chip reads what it does *before* use: `HOT HAND ×3 · 2:00`. While active: countdown ring on the chip, a `×3` badge above the dice, and every float tinted hot-orange. While cooling down it reads `HOT HAND ↻ 17m 59s` (no `×3`, so it cannot be read as a running buff), dimmed and not tappable.
 12. **RECAST — prestige** (250,000 × M run coins, max 3 runs). All dice → 1 side, x2/jackpot/tier → 0, coins → 0, roller → `floor(L/2)`. Kept: shards, multiplier, die slots, skins, half the roller. After run 3 the button reads `RUN 3/3 · ALL THREE RUNS DONE`.
 13. **THEME TOGGLE** (t=0). Sun/moon corner icon, real toggle, persisted. **Not** a route into settings.
 14. **OFFLINE CARD** (resume > 60 s). One line, one COLLECT, one optional ad DOUBLE.
@@ -61,7 +61,7 @@ baseAvg(n)   = (n+1)/2
 x2Extra(n,k,m) = (m-1) · k·(2n-k+1)/2
 ΔE per purchase k = (m-1)·(n-k+1)/n
 ```
-First ×2 on a 6-side die: `+6/6 = +1.00` on an average of 3.5 → **+29%**. The 12th on a 20-side die: `+9/20` → **+3%**. The whole 12-purchase track is worth +83% on a 20-side die and +22% on a 100-side die: **×2 sides are the mid-game engine and fade by design.**
+First ×2 on a 9-side die: `+9/9 = +1.00` on an average of 5 → **+20%**. The 12th on a 20-side die: `+9/20` → **+3%**. The whole 12-purchase track is worth +83% on a 20-side die and +22% on a 100-side die: **×2 sides are the mid-game engine and fade by design.**
 
 **Jackpot.** Face 0 stops paying 1 and pays `jackVal`:
 ```
@@ -78,7 +78,7 @@ payout = (Σ_d faceValue(die_d, i_d)) · combo · M
 M      = (1 + 0.15·shards) · (1 + 0.10·setsComplete) · (hot ? 3 : 1)
 income/s = throwRate · Σ_d E(die_d) · c_hat · M
 ```
-`combo`: participants are dice with `n ≥ 6`; all equal → 3, one pair → 2, else 1. `c_hat ≈ 1 + 2/n` at D=2.
+`combo`: participants are dice with `n ≥ 6`; three equal → 3, a pair → 2, else 1 (A13). `c_hat ≈ 1 + 2/n` at D=2.
 
 ### Costs
 ```
@@ -95,7 +95,7 @@ skins        = die: 0 / 25,000 / 400,000   bg: 0 / 60,000 / 900,000
 
 ### Prestige & offline (unchanged from v1)
 ```
-threshold = 250000 · M      shards = floor(12 · min(runCoins/threshold, 2)^0.45)
+threshold = 250000 · (1 + 0.15·shards)      shards = floor(12 · min(runCoins/threshold, 2)^0.45)
 offline   = 0.5 · autoRate(L) · Σ E(die) · c_hat · M · min(away, 14400)
 ```
 Ad: rate → 1.0, cap → 28800 s, that claim only. Claim lives in the save and accumulates.
@@ -188,7 +188,7 @@ One canvas, one rAF, cancelled when nothing animates and on `visibilitychange`. 
 - **0–52 px.** Coin counter, centred, tabular, lerps over 180 ms. **Top-left:** sun/moon theme toggle (real toggle, persisted, both modes built from one token set — `--bg --surface --fg --dim --accent --gold --tint --danger`). **Top-right:** mute, then gear (settings). A palette chip appears beside mute once the first skin is affordable.
 - **52–112 px.** `MAX ROLL n`. Hot Hand chip when available.
 - **112–470 px.** Canvas.
-- **470–740 px.** The shop. No tabs, no menu. Full-width 64 px cards: icon, label, fixed price, progress ring filling toward it. Locked cards show a **ghosted preview** of what you'd get. **At most 4 cards on screen**: `+ SIDE` pinned top, `RECAST` pinned bottom when lit, the middle two are the cheapest unlocked of `×2 SIDE`, `JACKPOT`, `×3 TIER`, `ROLLER`, `+ DIE`. Purchases commit **on release**, 12 px slide-off cancels. Owned upgrades never leave the shop.
+- **470–740 px.** The shop. No tabs, no menu. Full-width 64 px cards: icon, label, fixed price, progress ring filling toward it. Locked cards show a **ghosted preview** of what you'd get. **At most 4 cards on screen**: `+ SIDE` pinned top, `RECAST` pinned bottom when lit, the middle two are the cheapest unlocked of `×2 SIDE`, `JACKPOT`, `×3 TIER`, `ROLLER`, `+ DIE`. Purchases commit **on release**, 12 px slide-off cancels; **holding** a repeatable card keeps buying (appendix A12). Owned upgrades never leave the shop.
 - **SKINS panel.** One screen, one grid, 2 rows × 3 swatches, each drawn live (a mini die, a mini background). Each swatch shows price, or `OWNED`, or `EQUIPPED`. Under each row: `2 / 3 · COMPLETE FOR +10% INCOME`, filling to `+10% ACTIVE`. **No sub-menus, no tabs, no categories beyond those two rows.**
 - **Settings (gear).** Mute, theme, hold-to-confirm hard reset, version. Nothing else.
 
@@ -366,8 +366,9 @@ Every other target in the table is hit as written.
 
 The spec says "the reachable shape set". The build scans every combination of
 side counts on a coarse ladder (1–14, then 16 … 100) for one, two and three dice,
-crossed with five upgrade profiles — 91,390 shapes, a strict superset of what is
-reachable. Testing a superset is stronger than testing the reachable set and does
+crossed with eight upgrade profiles (x2 0, 1, 2, 3, 6, 12, with and without
+jackpots) — 146,224 shapes. Doubled faces are only given to dice at or above
+`X2_UNLOCK_SIDES`, so every scanned shape is at least possible in kind. Testing a superset is stronger than testing the reachable set and does
 not need an argument about which shapes `+ DIE` and a Recast can produce. The
 played path of all six policies is checked exactly, on every purchase, as well.
 
@@ -460,6 +461,144 @@ save and the doubled figure comes from `E.offlineEarnings(st, away, true)`, whic
 applies the ad rate *and* the ad cap. `pendingOfflineAway` is only incremented
 when the absence actually produced a claim, so a hundred 20-second app switches
 no longer bank phantom away time against no coins.
+
+## A12. Hold to buy, chained morphs, and the Recast screen (v2.1)
+
+*From the owner's feedback after playing v1. No economy constant changed;
+everything here is presentation state in `<script id="game">`, and every
+purchase is still an ordinary `E.buy`.*
+
+**Hold-to-buy timing** (the `HOLD` table in the game script, asserted by
+`check.js`):
+
+- Repeatable cards: `+ SIDE`, `×2 SIDE`, `JACKPOT SIDE`, `ROLLER`. Not `RECAST`,
+  not `+ DIE`, not skins, and not `×3 TIER` — it is one purchase per die and a
+  flourish of its own, so it stays a tap.
+- A quick tap still buys exactly one, **on release**; the 12 px slide-off still
+  cancels. Holding: the first repeat at **350 ms**, then **4/s ramping linearly
+  to 15/s over 2 s**. At most 3 purchases per frame, and no backlog is banked
+  after a stalled frame.
+- The repeater stops on release, `pointercancel`, the finger leaving the card
+  (once repeating, drift inside the card is not a cancel), the card leaving the
+  shop or locking, an `×2` / `JACKPOT` card switching to a different die, a panel
+  opening, the page being hidden, or funds running out. `+ SIDE` keeps going
+  across dice — it always grows the smallest die, so alternating is its normal
+  behaviour, not a target change.
+- One press at a time across the whole shop: a second finger is ignored.
+- While repeating the card is pressed (gold border) and its ring sweeps round.
+  Sound is one short tick per purchase, a semitone higher each time (capped),
+  at most ~16/s; haptics at most ~12/s. Jackpot glints merge.
+
+**Chained morphs:**
+
+- One morph per die (`G.morphs`), stored unscaled and in the die's own frame,
+  drawn at the die's **current** rotation — the die keeps rolling (or spinning
+  in fast mode) while it grows, and its ground contact is read off the outline
+  actually drawn.
+- A purchase on a die that is already morphing starts from the outline **as
+  drawn this frame** and heads for the new one: 0.2 s, easeOutCubic, no
+  overshoot, no ring, no shake, no UI freeze. `check.js` asserts the retarget
+  is jump-free.
+- A roll in flight when its die grows is re-aimed at the new shape's flat
+  without moving the rotation drawn that frame.
+- During a hold the rim numerals wait; ticks, ×2/★ tints and pips stay; on a
+  40+ side die the value window counts the new top face up with a small pulse.
+- When the hold ends, **one** settle: 0.6 s easeOutBack onto the final shape,
+  the expanding ring, the numeral stamp, one grow chord, one small shake.
+- A plain tap is unchanged: the 600 ms money shot with the 700 ms freeze. A
+  second `+ SIDE` tap inside that freeze is no longer dropped: it buys and
+  retargets the running morph (other cards still wait out the freeze). A
+  re-tap while that die is still morphing is treated like a hold step plus
+  one settle: no new 700 ms freeze, no re-shake, so fast tapping never keeps
+  the stage frozen. Auto-roll payouts that land during a freeze are merged and
+  shown as one float when it ends, never dropped.
+- The settle after a hold keeps the value window at full opacity (no blink) and
+  starts exactly where the swell is drawn (no first-frame jump); its flourish is
+  a +5% swell and return (`1 + 0.05·sin(πt)`), visible even when the last
+  chained step had already parked.
+- The first `+ SIDE` on a die at rest keeps its landed face under the marker
+  (the outline is carried round by the difference), so ×2 / ★ wedges and pips
+  never jump to another rotation.
+- During a hold the numeral under the marker stays readable on dice under 40
+  sides; the other rim numerals wait. On 40+ sides the window still counts up.
+- `+ DIE` clears any running morph, which is stored at the old dice count's
+  radius and would otherwise draw its die too large in the narrower slot.
+- A middle card under the finger stays in the shop until release, even if it
+  is no longer one of the two cheapest and even after the repeater stopped for
+  funds or a retarget; the shop reshuffles after the thumb lifts. A hold that
+  bought nothing (the card was a few coins short at 350 ms) falls back to a tap:
+  it buys one on release if it can. Shop cards set `touch-action: none` and block the context menu, and
+  only the primary button presses them, so Android panning or a long-press
+  callout cannot cancel a hold.
+
+**The Recast screen** is numbers and icons, no sentences: title, `RUN n/3`,
+the payout multiplier as the hero (`×1.20 → ×4.08`, computed by running
+`E.recast` on a copy), `◆ +16`, a KEEP row (shards, dice, roller level, skins),
+a RESET row (sides → 1, coins → 0, ×2 ★), and CANCEL / RECAST. `check.js`
+fails if a paragraph or a four-word string comes back.
+
+## A13. A pair always pays ×2, and the RECAST bar ignores skin sets (v2.1 fixes)
+
+**Pair rule.** `comboFor` paid `COMBO_MULT` (×3) whenever *every participant*
+matched, so with two participating dice a pair paid ×3 and burst `TRIPLES ×3`
+between two dice. When a third die reached `COMBO_MIN_SIDES` that pair fell to
+×2, and on 100/100/5 the 5→6 press lowered income by 0.235% (upgraded) to
+0.349% (plain). A10's fall-through cannot help there because the small die is
+the only die left under `MAX_SIDES`, so a player who declines income-negative
+purchases froze for good: `never-prestige` stalled 239.7 min at 100/100/5 and
+`jack-first` stalled 389.1 min and never reached end of content.
+
+Built (rule change, no constant changed): three matching dice pay ×3, any pair
+pays ×2 (`comboFor`, the two-participant branch of `expectedPayout`, and
+`maxRoll`). The burst word follows the number of matched dice. Measured with
+`node sim.js`:
+
+- Reference gate: all 11 milestones PASS; first Recast 36.33 → 36.68 min, end
+  of content 130.29 → 130.46 min.
+- Forced `+ SIDE` purchases that lower EV over the 91,390 scanned shapes:
+  426 (worst −1.71%) → 3 (worst −0.03%, 6/6/6 → 7/6/6). *Corrected in A14:
+  that shape gave ×2 faces to 6-sided dice, which cannot happen; the reachable
+  worst case was 8/8/8 and is now removed.*
+- Match bonus is 1.0% of coins banked. No policy stalls; `jack-first` now
+  finishes at 240.7 min and `never-prestige` grows all three dice to 100.
+- `sim.js` now fails any always-open policy with a `+ SIDE` stall over 4 min,
+  and its invariant-1 scan presses `E.sideTarget` (the shipped rule) instead of
+  a copy of the old fewest-sides rule.
+
+**RECAST threshold.** It was `RECAST_AT × runMult`, and `runMult` includes the
++10% skin-set bonus, so buying the skin that completed a set could push the
+threshold above the run's coins and switch off a lit RECAST. It is now
+`RECAST_AT × (1 + 0.15·shards)`. Measured: the reference bot is unchanged to two
+decimals (it completes no set before its Recasts); the optimiser ends 86.3 →
+86.0 min, `hoard-2x` 100.3 → 98.9 min, all gates and invariants PASS.
+
+**v1 save.** After a migration the old `oms.save.v1` key is removed, but only
+once the v2 save has been written and read back.
+
+## A14. ×2 SIDE unlocks at 9 sides, not 8 (v2.1 fixes)
+
+**Measured problem.** An independent scan of every die at 6–16 sides with every
+per-die ×2 count (1,124,864 shapes) found 12 shapes, all 8/8/8 with 1–3 ×2 faces
+on each die, where every die's +1 lowers EV, so `E.sideTarget` must offer a
+losing `+ SIDE`. Worst: 8/8/8 with ×2 1/2/2 at **−0.228%** (re-measured here
+against ECON). Growing an 8-sided die shifts its ×2 faces up one index and thins
+the matched pairs. A player who only buys sides and refuses losing purchases is
+frozen there for good. `sim.js` missed it: its scan gave ×2 faces to dice below
+the unlock (reporting an unreachable 6/6/6 case) and its coarse profiles never
+produced 8/8/8 with 1–3 ×2.
+
+**Built.** `X2_UNLOCK_SIDES` 8 → **9**. `sim.js` now clamps ×2 to 0 below the
+unlock and scans ×2 profiles 1, 2 and 3 too (146,224 shapes).
+
+**Measured with `node sim.js`:**
+
+- With the new profiles at 8: 3 losing forced `+ SIDE` purchases, worst −0.15%
+  at 8/8/8 (×2 2/2/2). At 9: **0**, worst 0.00%.
+- Reference gate: all 11 milestones PASS; first ×2 side stays at 1.39 min, end of
+  content 130.46 → 130.47 min. Optimiser 86.0 min unchanged. INVARIANTS PASS.
+- The hoard proof now runs hoard levels 1.5×, 2× and 4× for both the cheapest and
+  the return-on-investment buyer; every one ends no sooner and with no more
+  shards than pressing RECAST when it lights.
 
 ## A8. Not built
 

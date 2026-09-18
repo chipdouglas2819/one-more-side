@@ -601,6 +601,11 @@ const LATTICE = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16, 18, 20, 24,
 
 const PROFILES = [
   { x2: 0, tier: 2, jack: 0 },
+  /* one to three doubled faces: the band where growing a small die shifts its
+     x2 faces up an index and thins the matched pairs (see SPEC A14) */
+  { x2: 1, tier: 2, jack: 0 },
+  { x2: 2, tier: 2, jack: 0 },
+  { x2: 3, tier: 2, jack: 0 },
   { x2: 6, tier: 2, jack: 0 },
   { x2: K.X2_MAX, tier: 3, jack: 0 },
   { x2: 0, tier: 2, jack: 3 },
@@ -609,7 +614,9 @@ const PROFILES = [
 
 /* A profile clamped to what the gates would actually have allowed on this die. */
 function shapeDie(n, p) {
-  const d = { n, x2: Math.min(p.x2, Math.max(0, n - 1), K.X2_MAX), tier: 2, jack: 0 };
+  /* no x2 below the unlock: a 6/6/6 with doubled faces cannot be reached */
+  const d = { n, x2: n < K.X2_UNLOCK_SIDES ? 0 : Math.min(p.x2, Math.max(0, n - 1), K.X2_MAX),
+              tier: 2, jack: 0 };
   if (d.x2 >= K.X2_MAX) d.tier = p.tier;
   let j = p.jack;
   while (j > 0 && n < E.jackGate(j)) j--;
@@ -620,14 +627,10 @@ function shapeDie(n, p) {
 /* Mirrors E.sideTarget: what invariant 1 is about is the purchase the game
    FORCES on the player, so the scan presses the same button the shop would. */
 function growMin(dice) {
-  let b = -1;
-  for (let i = 0; i < dice.length; i++) {
-    if (dice[i].n >= K.MAX_SIDES) continue;
-    if (b < 0 || dice[i].n < dice[b].n) b = i;
-  }
-  if (b < 0) return null;
+  const t = E.sideTarget({ dice });
+  if (!t) return null;
   const out = dice.map(E.cloneDie);
-  out[b].n += 1;
+  out[t.unit].n += 1;
   /* x2 never reaches face 0 and the jackpot gate only ever loosens as n grows,
      so a grown die keeps exactly the upgrades it had */
   return out;
@@ -821,6 +824,19 @@ for (const { policy, r } of results) {
       : ''));
 }
 
+/* ---- the + SIDE stall bound, across EVERY always-open policy ------------- */
+console.log('');
+console.log('  + SIDE STALL BOUND ON EVERY ALWAYS-OPEN POLICY');
+console.log('  (a player who refuses income-negative purchases must never stand in front of');
+console.log('   a lit, affordable + SIDE card for more than 4 minutes - SPEC A10/A13)');
+for (const { policy, r } of results) {
+  if (policy.closes) continue;
+  const ok = !(r.inv.stallLen > 4);
+  if (!ok) invFails++;
+  console.log(`  ${ok ? 'PASS' : 'FAIL'}  ${pad(policy.id, 16)}longest + SIDE stall ${r.inv.stallLen.toFixed(1)} min` +
+    (r.inv.stallLen > 4 ? ` at t=${r.inv.stallAt.toFixed(1)} - ${r.inv.stallReason}` : ''));
+}
+
 /* ---- content length, and the one thing A9 has to prove ------------------- */
 const fastR = results.find((x) => x.policy.id === 'optimiser');
 const hoardR = results.find((x) => x.policy.id === 'hoard-2x');
@@ -842,6 +858,23 @@ if (fastR && hoardR) {
   const ok = bEnd !== undefined && aEnd !== undefined &&
              bEnd >= aEnd - 1e-9 && b.finalState.shards <= a.finalState.shards;
   if (!ok) invFails++;
+  /* one hoard level and one buyer is a single point; the claim is that EVERY
+     level of waiting, for either honest buyer, finishes no sooner and with no
+     more shards */
+  const levels = [1.5, 2, 4];
+  for (const [name, choose, base] of [['cheapest', chooseCheapest, ref], ['roi', chooseBestRoi, a]]) {
+    const worse = [];
+    for (const h of levels) {
+      const r = (name === 'roi' && h === 2) ? b
+        : run({ id: 'hoard-' + h + '-' + name, taps: () => 1.7, open: () => true, hoard: h, choose });
+      const e = r.hit.endOfContent, e0 = base.hit.endOfContent;
+      if (!(e !== undefined && e0 !== undefined && e >= e0 - 1e-9 &&
+            r.finalState.shards <= base.finalState.shards)) worse.push(h);
+    }
+    if (worse.length) invFails++;
+    console.log(`  ${worse.length ? 'FAIL' : 'PASS'}  ${name} buyer: hoarding to ${levels.join('x, ')}x the threshold never ends ` +
+      `sooner or with more shards${worse.length ? ' (broken at ' + worse.join(', ') + 'x)' : ''}`);
+  }
   console.log(`  ${ok ? 'PASS' : 'FAIL'}  hoarding past the lit RECAST is never better: pressing it ` +
     `ends at ${aEnd === undefined ? 'never' : aEnd.toFixed(1)} min with ${a.finalState.shards} shards ` +
     `(M x${E.runMult(a.finalState).toFixed(2)}), waiting for 2x ends at ` +

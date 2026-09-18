@@ -193,7 +193,10 @@ if (!econ) {
     /* --- combo: still one evaluator over the landed-index array --- */
     {
       const two = [{ n: 6, x2: 0, tier: 2, jack: 0 }, { n: 6, x2: 0, tier: 2, jack: 0 }];
-      if (E.comboFor(two, [3, 3]) !== K.COMBO_MULT) problems.push('two matching dice must pay the triples multiplier');
+      if (E.comboFor(two, [3, 3]) !== K.COMBO_PAIR_MULT) problems.push('two matching dice must pay the doubles multiplier (a pair is never triples)');
+      const three = [{ n: 6, x2: 0, tier: 2, jack: 0 }, { n: 6, x2: 0, tier: 2, jack: 0 }, { n: 6, x2: 0, tier: 2, jack: 0 }];
+      if (E.comboFor(three, [2, 2, 2]) !== K.COMBO_MULT) problems.push('three matching dice must pay the triples multiplier');
+      if (E.comboFor(three, [2, 2, 4]) !== K.COMBO_PAIR_MULT) problems.push('a pair among three dice must pay the doubles multiplier');
       if (E.comboFor(two, [3, 4]) !== 1) problems.push('two different faces must pay no bonus');
       const small = [{ n: 5, x2: 0, tier: 2, jack: 0 }, { n: 5, x2: 0, tier: 2, jack: 0 }];
       if (E.comboFor(small, [1, 1]) !== 1) problems.push('dice under COMBO_MIN_SIDES must sit the match out');
@@ -214,10 +217,10 @@ if (!econ) {
     }
     {
       const s = E.newState();
-      s.dice = [{ n: 7, x2: 0, tier: 2, jack: 0 }];
-      if (E.unlocked(s, 'x2')) problems.push('x2 SIDE unlocks below 8 sides');
       s.dice = [{ n: 8, x2: 0, tier: 2, jack: 0 }];
-      if (!E.unlocked(s, 'x2')) problems.push('x2 SIDE does not unlock at 8 sides');
+      if (E.unlocked(s, 'x2')) problems.push('x2 SIDE unlocks below 9 sides (SPEC A14)');
+      s.dice = [{ n: 9, x2: 0, tier: 2, jack: 0 }];
+      if (!E.unlocked(s, 'x2')) problems.push('x2 SIDE does not unlock at 9 sides');
       s.dice = [{ n: 11, x2: 0, tier: 2, jack: 0 }];
       s.roller = 0;
       if (E.unlocked(s, 'jack')) problems.push('JACKPOT unlocks below 12 sides');
@@ -316,6 +319,90 @@ if (!econ) {
         problems.push(`geometry helpers threw: ${err.message}`);
       }
     }
+  }
+}
+
+/* --- hold-to-buy and chained morphs, run headless -------------------------
+   The repeater's timing constants have to describe the feel the owner asked
+   for (a pause, then ~4/s ramping to ~15/s over ~2 s, haptics <= ~12/s), and a
+   chained morph has to start EXACTLY where the one it replaces was drawn, or a
+   thirty-side hold is thirty little jumps instead of one swell. */
+{
+  const g = blocks.find((b) => b.id === 'game');
+  if (g) {
+    const code = g.code;
+    const cut = (from, to) => {
+      const a = code.indexOf(from), b = code.indexOf(to, a + 1);
+      return a < 0 || b < 0 ? null : code.slice(a, b);
+    };
+    const holdSrc = cut('var HOLD = {', '};');
+    const easeSrc = cut('function easeOutQuart', '/* ---- canvas');
+    const morphSrc = cut('var MORPH_PTS', 'function rebaseForGrowth');
+    const geoSrc = cut('var TOP = -Math.PI / 2;', 'function easeOutQuart');
+    if (!holdSrc || !easeSrc || !morphSrc || !geoSrc) {
+      problems.push('cannot find HOLD, the easings or the morph helpers in the game block');
+    } else {
+      const sb = { Math: Math, E: { K: { MAX_SIDES: 100 } }, G: { morphs: [] } };
+      vm.createContext(sb);
+      try {
+        vm.runInContext(geoSrc + easeSrc + holdSrc + '};' + morphSrc +
+          ';this.HOLD = HOLD;', sb, { filename: 'index.html#hold' });
+        const H = sb.HOLD;
+        const inRange = (k, lo, hi) => {
+          if (!(H[k] >= lo && H[k] <= hi)) problems.push(`HOLD.${k} = ${H[k]}, expected ${lo}..${hi}`);
+        };
+        inRange('DELAY_MS', 250, 500);
+        inRange('RATE_START', 2, 6);
+        inRange('RATE_END', 10, 20);
+        inRange('RAMP_MS', 1000, 3000);
+        inRange('MORPH_S', 0.08, 0.3);
+        inRange('SETTLE_S', 0.4, 0.8);
+        inRange('SLIDE_PX', 8, 16);
+        inRange('MAX_PER_FRAME', 1, 4);
+        if (!(1000 / H.HAPTIC_GAP_MS <= 12.5)) problems.push(`hold haptics can fire ${(1000 / H.HAPTIC_GAP_MS).toFixed(1)}/s, cap is ~12`);
+        if (!(H.RATE_END > H.RATE_START)) problems.push('the hold repeater must ramp UP');
+        for (const k of ['side', 'x2', 'jack', 'roller']) if (!H.KINDS[k]) problems.push(`${k} should repeat on hold`);
+        for (const k of ['recast', 'unit']) if (H.KINDS[k]) problems.push(`${k} must never repeat on hold`);
+        /* chained morph continuity: retarget mid-swell, then the new morph's
+           first frame must be the old morph's current frame, point for point */
+        const pts = (n) => sb.resample(sb.outline(n, 100 + n), 240);
+        const a = { t: 0.37, ease: 'out', from: pts(5), to: pts(6) };
+        const cur = sb.morphNow(a);
+        const b = { t: 0, ease: 'out', from: cur, to: pts(7) };
+        const first = sb.morphNow(b);
+        let jump = 0;
+        for (let i = 0; i < 240; i++) jump = Math.max(jump, Math.hypot(first[i][0] - cur[i][0], first[i][1] - cur[i][1]));
+        if (jump > 1e-9) problems.push(`a chained morph jumps ${jump.toFixed(3)}px when it retargets`);
+        /* steering a roll in flight must not move the rotation drawn this frame */
+        const an = { from: 0.3, to: 0.3 + 4 * Math.PI + 1.1, t: 0.42 };
+        an.rot = an.from + (an.to - an.from) * sb.rollEase(an.t);
+        const before = an.rot;
+        sb.steerRoll(an, -0.21);
+        const now = an.from + (an.to - an.from) * sb.rollEase(an.t);
+        if (Math.abs(now - before) > 1e-9) problems.push('steering a roll for a new side count moves the die this frame');
+        if (Math.abs(an.to - (0.3 + 4 * Math.PI + 1.1 - 0.21)) > 1e-9) problems.push('a steered roll does not land on the new flat');
+        console.log('  OK   hold-to-buy timing is sane and chained morphs retarget without a jump');
+      } catch (err) {
+        problems.push(`hold / morph helpers threw: ${err.message}`);
+      }
+    }
+  }
+}
+
+/* --- the Recast screen is numbers and icons, not paragraphs ---------------- */
+{
+  const a = html.indexOf('id="recastPanel"'), b = html.indexOf('id="skinsPanel"');
+  const panel = a >= 0 && b > a ? html.slice(a, b) : '';
+  if (!panel) problems.push('cannot find the Recast panel');
+  else if (/<p\b/i.test(panel)) problems.push('the Recast panel has a paragraph in it again - show, do not tell');
+  const g = blocks.find((x) => x.id === 'game');
+  if (g) {
+    const s = g.code.indexOf('function openRecast'), e = g.code.indexOf('function doRecast');
+    const body = s >= 0 && e > s ? g.code.slice(s, e) : '';
+    /* any string literal with four or more words in a row is a sentence */
+    const sentence = (body.match(/'[^'\n]*'/g) || [])
+      .filter((q) => !/[<>]/.test(q) && /[A-Za-z]+ +[A-Za-z]+ +[A-Za-z]+ +[A-Za-z]+/.test(q));
+    if (sentence.length) problems.push(`openRecast prints a sentence: ${sentence[0]}`);
   }
 }
 
