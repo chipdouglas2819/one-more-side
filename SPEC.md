@@ -1,214 +1,471 @@
-# ONE MORE SIDE — Final Build Spec v1.0
+# ONE MORE SIDE — Build Spec v2.0
+
+*Supersedes v1.0. Everything in v1 not contradicted here still stands (auto-roller, 3 dice, 3 Recasts, offline card, DEV ad stubs, save/sanitise, ECON block, sim gate, policy guardrails).*
+
+---
 
 ## 1. Hook & Title
 
-**Working title:** ONE MORE SIDE
-**Hook:** You start with a die that has exactly one side; every coin buys it another side, and the shape itself is the progress bar.
+**ONE MORE SIDE.** You start with a die that has exactly one side. Every coin buys it another side, and the shape itself is the progress bar. A six-sided die reads **1 2 3 4 5 6**. Then you start buying *what the faces do*.
 
 ---
 
 ## 2. Core Loop & First Two Minutes
 
-**Loop:** Tap die → it tumbles, lands on a face → that face's value pays coins → one big button says `+ SIDE` with a price → tap → the polygon visibly grows an edge with the next number on it → repeat. Later: auto-roller, then a second die born at one side.
+**Loop:** tap → the die spins and lands on a face → that face pays, the number floats up **from that die** → a full-width card says `+ SIDE` with a fixed price → tap → the polygon visibly grows an edge → repeat. Later the faces themselves get bought: a `×2 SIDE`, then a `JACKPOT SIDE`.
 
-**First two minutes (target, simulator-checked):**
-
-- **0:00** One pale shape on charcoal: a circle with one flat spot on the bottom, resting on a ground line. A pulsing finger icon. Coins: 0. No text.
-- **0:00–0:10** Each tap tumbles it one pivot onto its flat; `+1` floats up. ~1.7 taps/s.
-- **0:02** `+ SIDE` slides up from the bottom **ghosted**, reading `ROLL TO UNLOCK`, showing the faint outline of the polygon you'd get. ROLLER and + DIE both get this preview; the first button in the game used to be the one that didn't, leaving the shop completely empty until the sixth coin.
-- **0:06** It lights: price `10`, progress ring filling as coins accrue.
-- **0:10–0:12 FIRST PURCHASE.** Ball squashes, splits into a lens, a `2` stamps onto the new edge, 6px screen shake, coin burst, low thunk + rising chime, **all other UI frozen 700 ms**. `MAX ROLL 1 → 2` ticks under the die. Button re-prices to 20.
-- **0:12–0:30** Side 3 (~0:22) → triangle. Side 4 (~0:35) → square.
-- **0:35–1:20** Sides 5, 6. Values outpace side count (5→6, 6→9), payouts visibly jump.
-- **~1:20** Six sides: the object reads as a die. No copy says so.
-- **1:20–2:00** `ROLLER — 600` appears. Player mashes toward it; side 7 lands on the way.
+- **0:00** One pale shape on a ground line, a pulsing finger. Coins: 0. No text.
+- **0:00–0:08** Each tap pivots it onto its flat; `+1` floats. ~1.7 taps/s.
+- **0:02** `+ SIDE` slides up **ghosted**, reading `ROLL TO UNLOCK`, showing the faint outline of the polygon you'd get.
+- **0:06** It lights: price **10**, progress ring filling.
+- **0:09 FIRST PURCHASE.** Squash, split to a lens, a `2` stamps on the new edge, 6px shake, coin burst, thunk + rising chime, all other UI frozen 700 ms. `MAX ROLL 1 → 2`.
+- **0:09–0:36** Sides 3, 4, 5, 6 arrive every ~6 s (cost rises 16%/side, income rises ~15%/side — the early drip is deliberately near-flat).
+- **~0:36** Six sides. It reads as a die: 1,2,3,4,5,6. No copy says so.
+- **0:40–1:10** At 8 sides the **`×2 SIDE`** card lights (120). Buy it: the top face tints and grows a small `×2` tag. Next landing on it pays double and the float is tinted to match.
+- **1:10–2:00** `ROLLER — 600` appears; the player mashes toward it, sides 9–11 land on the way.
 
 ---
 
 ## 3. Systems, In Unlock Order
 
-1. **THE DIE (t=0).** `die = { faces: [int] }`. `S = faces.length`. A roll picks uniform index `i ∈ [0,S)` and pays `faces[i]`. That is the whole simulation.
-2. **+ SIDE (unlocked at 6 coins earned).** Appends `V(S+1)`. With multiple dice it **auto-targets the die with the fewest sides** (that die pulses). Never a choice.
-3. **MAX ROLL readout (t=0).** One line under the die: `MAX ROLL n`. Counts up digit-by-digit on each side purchase.
-4. **ROLLER (unlocks at 6 sides).** Global auto-roll, 11 levels (L0–L10). **Level 0 is 2.0 rolls/s, above comfortable thumb speed (~1.7/s) — hard acceptance test on a real phone.** Manual taps still add an extra throw on a 100 ms cooldown. Never gated, never fuelled, never removed mid-run; survives prestige at half level.
-5. **+ DIE (unlocks at 10 sides on die 1 **and** roller level 2).** New die born at **one side**. Because + SIDE auto-targets the smallest, the player replays the best two minutes with late-game income. Cap: **3 dice**. The roller condition is not a price gate — L0+L1+L2 costs 7,800 against the die's 5,000, and the reference bot already owns Lv2 by 11 minutes, so it costs a normal player nothing. It narrows a trap: saving for the die first leaves the player hand-rolling at 1.7/s while every + SIDE coin goes to a newborn die at 4× price. **It does not close it.** No unlock gate can: a player is free to hoard from minute zero, and a bot that buys the minimum 10 sides and then banks still reaches the auto-roller at **13.5 min against a 4-minute target**. What the gate guarantees is that by the time a second die exists the roller is at 3.65 rolls/s rather than 2.0, and that skipping the roller is never a shortcut to the die. The earlier claim that this ordering closed the trap was wrong and the simulator now runs a `rush-die` policy that measures it every time.
-6. **COMBO (auto, from 2 dice).** One evaluator over the landed index set. Only dice with **≥ 6 sides** take part (`COMBO_MIN_SIDES`); below that a match is so likely that growing a die would *lower* income, which is the trap invariant 1 forbids. Of the participating dice: all equal → `×3`; exactly a pair equal → `×2`; otherwise `×1`. With two dice those first two are the same event, so two dice behave exactly as "all equal → ×3"; the pair tier exists only so that adding a third die can never cost income. Readable from the visual — **only the dice that actually matched** glow gold and link with a light thread, and the floating number is anchored over them, never over a die that sat the combo out. The die + SIDE will grow **pulses gold**; with two or three dice that is the player's only cue, because they never get to choose.
-7. **RECAST — prestige (unlocks at 250,000 × M coins earned this run, capped at 3 runs).** All dice → 1 side, coins → 0, roller → `floor(L/2)`. **Retained:** shards, global multiplier, die slots owned, half the roller. Recast screen leads with what you keep. After the third Recast the button stays on screen reading `RUN 3/3 · ALL THREE RUNS DONE` and never lights again — the cap is what makes "content ends after run 3" true in the code rather than only in this document.
-8. **OFFLINE CARD (on any resume >60 s).** One line, one big COLLECT, one optional ad DOUBLE.
-
-No files/pips sink, no achievements, no dailies, no tokens, no face types, no second currency.
+1. **THE DIE (t=0).** `die = { n, x2, tier, jack }`. Faces are `1..n`. A roll picks a uniform index `i ∈ [0,n)` and pays `faceValue(die, i)`.
+2. **+ SIDE** (at 6 coins lifetime). Appends face `n+1`. Auto-targets the die with fewest sides — falling through to the next-smallest when growing the smallest one would *lower* income, which happens only at the `COMBO_MIN_SIDES` crossing. Never a choice. `MAX_SIDES = 100`.
+3. **MAX ROLL readout** (t=0). One line under the dice, ticks up on every purchase.
+4. **×2 SIDE** (at 8 sides on the target die). Each purchase doubles **one more face, highest first**: purchase `k` doubles face `n−k+1`. Cap `X2_MAX = 12` per die. Doubled faces are tinted and carry a small `×2` tag.
+5. **ROLLER** (at 6 sides). Global auto-roll, L0–L11, L0 = 2.0 rolls/s. Manual taps still throw on a 100 ms cooldown. Survives Recast at half level.
+6. **JACKPOT SIDE** (at 12 sides on that die **and** roller owned). Face index 0 — the die's `1` — becomes the jackpot: **gold with a star**. It pays `JACK_MULT(t) × (n+1)/2`. Further purchases raise `t`; **there is never a second jackpot face.** Tier `t` requires `n ≥ JACK_MULT(t)/3` sides on that die, so the jackpot grows with the die and the card greys out reading `NEEDS <x> SIDES` rather than silently underpaying.
+7. **×3 TIER** (when a die has all 12 ×2 faces). One purchase per die; every doubled face becomes `×3`, tag changes to `×3`. One card, no sub-menu.
+8. **+ DIE** (10 sides on die 1 **and** roller L2). New die born at one side. Cap **3**.
+9. **DOUBLES / TRIPLES** (auto, from 2 dice, dice with `n ≥ 6` only). Landed numbers equal: all → `×3`, exactly a pair → `×2`. **No connecting line.** The matched dice glow, a `DOUBLES ×2` / `TRIPLES ×3` tag bursts at the midpoint between them for 500 ms, and *then* the per-die floats rise showing the already-multiplied amounts.
+10. **SKINS** (first skin affordable). One panel, one grid: 3 die skins × 3 backgrounds. Slot 1 of each is owned from the start. Buy with coins, equip freely, **own all 3 in a category → permanent +10% income**, printed on the panel row. Skins and their bonus survive Recast.
+11. **HOT HAND** (rewarded). Chip reads what it does *before* use: `HOT HAND ×3 · 2:00`. While active: countdown ring on the chip, a `×3` badge above the dice, and every float tinted hot-orange.
+12. **RECAST — prestige** (250,000 × M run coins, max 3 runs). All dice → 1 side, x2/jackpot/tier → 0, coins → 0, roller → `floor(L/2)`. Kept: shards, multiplier, die slots, skins, half the roller. After run 3 the button reads `RUN 3/3 · ALL THREE RUNS DONE`.
+13. **THEME TOGGLE** (t=0). Sun/moon corner icon, real toggle, persisted. **Not** a route into settings.
+14. **OFFLINE CARD** (resume > 60 s). One line, one COLLECT, one optional ad DOUBLE.
 
 ---
 
 ## 4. Economy
 
-All currency arithmetic goes through `add/mul/cmp` helpers from line one (bignum swap later is mechanical).
+All currency through `add/mul/cmp`.
 
-**Face values (exponential — this is the backbone):**
+### Faces
 ```
-V(n) = ceil(1.55^(n-1))
-n=1..20: 1,2,3,4,6,9,14,22,34,52,81,125,193,299,463,717,1110,1721,2667,4134
+baseFace(i)  = i+1                       // i = 0..n-1, so faces read 1..n
+baseAvg(n)   = (n+1)/2
 ```
-A die with S sides has `faces = [V(1)..V(S)]`.
+`V(n)` and its 1.55 ladder are **deleted.**
 
-**Expected value per die:** `E(S) = (1/S) · Σ_{n=1..S} V(n)`
+**×2 sides.** With `x2 = k` doubled faces at tier `m ∈ {2,3}`, faces `n-k+1 .. n` pay `m ×` their number.
 ```
-E(1..20) = 1, 1.5, 2, 2.5, 3.2, 4.17, 5.57, 7.63, 10.6, 14.7,
-           20.7, 29.4, 42.0, 60.4, 87.2, 126.6, 184.4, 269.8, 396, 583
+x2Extra(n,k,m) = (m-1) · k·(2n-k+1)/2
+ΔE per purchase k = (m-1)·(n-k+1)/n
+```
+First ×2 on a 6-side die: `+6/6 = +1.00` on an average of 3.5 → **+29%**. The 12th on a 20-side die: `+9/20` → **+3%**. The whole 12-purchase track is worth +83% on a 20-side die and +22% on a 100-side die: **×2 sides are the mid-game engine and fade by design.**
+
+**Jackpot.** Face 0 stops paying 1 and pays `jackVal`:
+```
+JACK_MULT(t) = ceil(8 · 1.9^(t-1))   t=1..6 → 8, 16, 29, 55, 104, 198
+jackVal(n,t) = JACK_MULT(t) · (n+1)/2
+gate: n ≥ ceil(JACK_MULT(t)/3)       → 3, 6, 10, 19, 35, 66 sides
+```
+Income multiplier from the jackpot ≈ `1 + JACK_MULT/n`; with the gate at `3n` the jackpot's share of a die's income is **bounded at exactly 75%**, so normal faces never stop mattering. Tiers roughly double a die's income each — this is the late-game engine, and its side gate is why buying sides stays worth doing to 100.
+
+**Expected payout (single closed form, the only EV in the codebase):**
+```
+E(die) = [ n(n+1)/2 − 1 + jackVal + x2Extra ] / n
+payout = (Σ_d faceValue(die_d, i_d)) · combo · M
+M      = (1 + 0.15·shards) · (1 + 0.10·setsComplete) · (hot ? 3 : 1)
+income/s = throwRate · Σ_d E(die_d) · c_hat · M
+```
+`combo`: participants are dice with `n ≥ 6`; all equal → 3, one pair → 2, else 1. `c_hat ≈ 1 + 2/n` at D=2.
+
+### Costs
+```
+C_side(d,n)  = ceil(10   · 1.16^(n-2) · 4^(d-1))
+C_x2(d,k)    = ceil(120  · 2.60^(k-1) · 4^(d-1))     k = 1..12
+C_tier3(d)   = ceil(25 · C_x2(d,12))
+C_jack(d,t)  = ceil(2500 · 2.80^(t-1) · 4^(d-1))     t = 1..6
+C_roller(L)  = ceil(600  · 3.00^(L+1))               L = 0..11
+C_die(N)     = 5000 · 12^(N-1)                        → 5,000; 60,000
+skins        = die: 0 / 25,000 / 400,000   bg: 0 / 60,000 / 900,000
 ```
 
-**Per-throw payout:** `payout = (Σ_d faces_d[rand_d]) · combo · M`
-`combo` is evaluated over the dice with `S ≥ 6` only: all of them equal → 3, exactly a pair equal → 2, else 1. Fewer than two such dice → 1.
-Measured `c_hat`: D=1 → 1.00; D=2 → `1 + 2/S ≈ 1.10`; D=3 → `1 + 2/S² ≈ 1.02` plus the pair tier, so ~1.15 at equal side counts. **Do not assume more.**
+**Why 1.16 and not 2.2.** With faces `1..n`, one more side multiplies a die's base income by only `(n+2)/(n+1)` — 14% at n=6, 2% at n=50, 1% at n=99. Sides are **not** the growth engine any more, so their price cannot grow like one. `2.2^98 ≈ 10^33` is not a number in this game. The correct law is the **uniform-spread law**: total income growth across the prototype is ≈ `10^6`, spread over 98 side purchases → `10^(6/98) = 1.152`. Rounded to **1.16**, which keeps time-per-side near-flat in the opening (cost +16%/side against income +15%/side) and lets the exponential systems — ×2, jackpot, roller, dice, M — carry the rest. Sample prices: n=6 → 19, n=20 → 145, n=50 → 12,420, n=100 → 20,800,000. Sim may tune `SIDE_GROWTH` **only inside 1.12–1.20**.
 
-*`COMBO_MIN_SIDES` changed from 4 to 6.* At 4, walking the shapes a player can actually reach found 34 where the forced + SIDE **lowers** income, the worst by 3.9%, and from `20/4/4` — reached by buying die 3 while die 2 is still small — income stayed below its starting level for **nine consecutive presses**, troughing 8.9%. That is the only button in the shop making the coin counter run backwards for minutes. At 6 it is 15 shapes, worst 1.8%, deepest run 3.0% over five presses, and the specific trap (a big die beside two small ones) is gone because dice under 6 sit the combo out. Going to 8 buys little more (0.7% over one press) and deletes the combo from the early part of **every** run, including the whole replay after each Recast.
-
-**Income:** `coins/s = throwRate · (Σ_d E(S_d)) · c_hat · M`
-
-**Auto-roll:** `autoRate(L) = 2.0 · 1.35^L`, L = 0..11 → 2.00, 2.70, 3.65, 4.92, 6.64, 8.97, 12.11, 16.34, 22.06, 29.79, 40.21, 54.29
-`C_roller(L) = ceil(600 · 3.0^(L+1))`, 12 purchases → 600, 1800, 5400, 16200, 48600, 145800, 437400, 1312200, 3936600, 11809800, 35429400, 106288200
-
-*Changed twice: from the original 9 purchases at growth 3.2 to 11, and now to 12.* With the roller topping out at Lv8, the last four sides of die 3 were the only purchase left in the game and the reference bot sat 6, 9 and 14 minutes in a row with the whole shop greyed out — invariant 5 broken whole-game at 864 s between sides. Topping out at Lv10 fixed the reference bot but left a player who never presses RECAST — the most common idle-game behaviour there is, because resetting feels like losing — with a **52.3-minute** stretch at t=309 min with nothing affordable, breaking invariant 2 outright, and then an empty shop for good at t=361 min. One more level takes that to 39.1 min.
-**The direction is not monotonic and guessing here is a mistake:** Lv13 and Lv14 make the never-prestige wall far *worse* (106 and 237 min), because once the sides are maxed the only item left in the shop is a roller level costing hundreds of millions. Lv11 at growth 3.0 is the measured optimum; 2.9 drops end-of-content out of band and 3.1 breaks the 600 s side ceiling at 687 s.
-
-**Side cost:** `C_side(d, n) = ceil(10 · 2.2^(n-2) · 4^(d-1))` for the n-th side of die d.
-Die 1 (sides 2..20): 10, 22, 49, 107, 235, 516, 1134, 2495, 5488, 12073, 26560, 58432, 128551, 282811, 622183, 1368801, 3011362, 6624996, 14574990. Die 2 = ×4, die 3 = ×16.
-Income grows ~1.28–1.47× per side against cost ×2.2 → time-per-side lengthens ~1.50–1.72×.
-
-*Changed from the spec's original 1.95.* At 1.95 the reference bot burned through all three runs in 49 minutes against the 150-minute target and every other milestone landed 20–40% early. `V(n)` was not touched.
-
-**Die slots:** `C_die(N) = 5000 · 12^(N-1)` → 5,000 then 60,000. Slots are permanent through Recast.
-
-**Prestige:**
+### Prestige & offline (unchanged from v1)
 ```
-threshold    = 250000 · M              (M is fixed for the whole of a run)
-shardsGained = floor( 12 · (runCoins / threshold)^0.45 )
-M            = 1 + 0.15 · totalShards
-maximum of 3 Recasts
+threshold = 250000 · M      shards = floor(12 · min(runCoins/threshold, 2)^0.45)
+offline   = 0.5 · autoRate(L) · Σ E(die) · c_hat · M · min(away, 14400)
 ```
-Anti-hoarding: **within a run**, 10× the wait yields 2.8× shards, so recasting promptly is always correct. The threshold is measured against the multiplier you already own, or coins earned this run would include `M` and a big `M` would hand you another full payout for no new progress. That scaling means the *prompt* payout is a flat 12 shards on every run, which is why the run count is capped: without the cap the game is an identical five-minute loop with no ceiling on `M`, which is the opposite of what the line below promises. Shards buy nothing — they are `M` and only `M`. Content honestly ends after run 3, and the Recast button says so.
+Ad: rate → 1.0, cap → 28800 s, that claim only. Claim lives in the save and accumulates.
 
-**Offline (closed form, never simulated):**
-```
-offline = 0.5 · autoRate(L) · Σ_d E(S_d) · c_hat · M · min(secondsAway, 14400)
-```
-Cap 4 h; the rewarded ad raises the rate factor to 1.0 and the cap to 28800 s for that claim only. `<60 s` → **grant** and show nothing (the rAF loop is cancelled while the page is hidden, so those seconds are not earned in game either; dropping them meant a player app-switching for 30–50 s at a time earned nothing at all for that time). Clamp elapsed to `[0, cap]`.
+### Milestones (sim asserts, ±35%; bot = 1.7 taps/s, buys cheapest income-positive item)
 
-**The uncollected claim lives in the save** (`pendingOffline`, `pendingOfflineSeconds`), never in a field on the loop object, and `handleReturn` **accumulates** into it rather than assigning. Every `save()` advances `savedAt`, so a claim held only in memory was destroyed twice over: by an app kill five seconds after the card opened, and by a second `handleReturn` when the player switched apps for ninety seconds and came back to find four hours of income replaced by a few hundred coins.
-
-**EV source of truth:** one closed-form `expectedPayout()` over the live `faces` arrays. No Monte Carlo, no second formula.
-
-**Milestones (simulator asserts, ±35%, bot = 1.7 taps/s while open, always buys cheapest income-positive purchase):**
+**These targets are asserted against the reference bot only.** Other reasonable
+ways to play land outside ±35% on individual rows without producing a bad
+experience — a jackpot beeline reaches the first jackpot at 5.1 min, a
+second-die rush reaches 20 sides at 9.9, a deep prestige hoard reaches its first
+Recast at 78. `sim.js` prints all of them as WARN for shape. The four opening
+marks — first side, 6 sides, first ×2, 20 sides — hold on every policy measured.
 
 | Milestone | Target (min) |
 |---|---|
-| First side (d1→d2) | 0.2 (must be <0.4) |
-| 6 sides | 1.5 |
+| First side | 0.15 (**must be < 0.4**) |
+| 6 sides | 0.6 |
+| First ×2 side | 1.2 |
 | Auto-roller bought | 4 |
-| Second die | 9 |
-| First Recast | 30 |
-| End of content (3 dice, d20, 3rd Recast) | 105 |
+| 20 sides | 7 |
+| First jackpot side | 9 |
+| Second die | 14 |
+| First Recast | 34 |
+| 50 sides on die 1 | 55 |
+| 100 sides on die 1 | 105 |
+| End of prototype content | 135 |
 
-*End of content changed from 150.* 150 is not reachable. A grid over `SIDE_GROWTH` × `UNLOCK_UNIT_SIDES` × `MAX_ROLLER_LEVEL` × `ROLLER_GROWTH` — 120 combinations — found exactly **three** that keep every milestone in band, hold the whole-game 10-minute time-per-side ceiling, and keep a never-prestige player inside the 45-minute purchase bound. The longest run any of the three produced was **107.4 min**. `SIDE_GROWTH 2.3` does reach 144.7 min but takes the worst gap between sides to 1091 s and the never-prestige wall to 116 min, and the spec's own range stops at 2.30, so there is no lever left. The target now says what the economy does: the reference bot lands at 101.9 min and an active tapper at 91.5.
-**This is a commercial fact, not a balance nicety.** A committed player exhausts everything in an evening and a half, and after 20/20/20 Lv11 on run 3 there is nothing to press and nothing for the offline card to fund. Lengthening it means more content, not more tuning.
+**Honest statement — content length is a RANGE, 86–130 minutes, not a number.**
+The reference bot buys the cheapest income-positive card, which is what the
+shop's own progress rings point at, and finishes at 130.3 min. A player who
+works out that the jackpot is the big lever and buys by return instead, at the
+*same* 1.7 taps/s, finishes at 86.1 (`optimiser` in `sim.js`, which asserts the
+band as well as printing it). The milestone table above is the reference bot's;
+the optimiser's mid-game rows are roughly half of it, and that is a difference
+in buying order, not a bug. At either end a committed player finishes with 3
+dice at 100 sides, 12 ×2 faces at tier 3, jackpot tier 6, roller L11, both skin
+sets and three Recasts spent — and the shop is empty for good. That is roughly
+an evening. Lengthening it means **more content**, not more tuning. Do not
+attempt to fix it with constants.
 
-**Hard invariants the headless sim must assert:**
-1. Income never decreases after any purchase, **including a Recast taken at its unlock threshold**. Asserted three ways: nothing on the played path may lower income; a walk over every shape a player can **reach** bounds the single-press residue at **2%**; and the same walk bounds the *cumulative* dip at **3.5%**, because a run of losing presses is what a player actually notices, not one of them. Reachable means what + SIDE and + DIE can actually produce — + SIDE always grows the auto-target, + DIE appends a one-sided die, a Recast returns every owned die to one side — which is 1602 shapes, not the 20³ cube. Growing the smaller of two level dice thins the match it was part of, so a multiplicative combo cannot be made perfectly monotonic: at `COMBO_MIN_SIDES = 6`, 15 reachable shapes lose EV, worst 1.80% (`20/6/6 → 20/7/6`), deepest run 3.01% over five presses. A policy that merely *declines* the losing purchase hides this, which is why it is walked rather than sampled.
-2. No purchase is ever more than 45 min of current income away, except `C_side(1,20)`. **Asserted on every always-open policy, not only the reference bot** — including one that never presses RECAST, which is where the 52-minute wall that this bound is supposed to forbid was actually hiding.
-3. `+ SIDE` is never strictly dominated by ROLLER at any point in the run.
-4. Combo contribution ≤ 15% of total measured income. **This is coin-weighted across the whole run, not a per-configuration bound.** The *instantaneous* share peaks higher when dice happen to hold equal side counts (32.1% at 6/6/6, falling as `2/(S+2)` — 12.9% at 20/20/20), because `+ SIDE` auto-targets the smallest die and so keeps them level. Capping the instantaneous figure at 15% would need `COMBO_MIN_SIDES ≥ 12`, which deletes the combo from most of the game; the banked figure on the reference path is 12.6%. The sim walks every reachable shape and bounds the instantaneous peak at 35% so the two figures cannot drift apart unnoticed.
-5. Time-per-side stays within 6 s – 10 min. **The 10-minute ceiling is asserted whole-game** — over every die and every run, not only die 1 of run 1. Scoped narrowly it reads PASS while the real tail of the game sits at 14 minutes with a greyed-out shop. Two deliberate scopings:
-   - **The 6-second floor is die 1 of run 1 only.** The post-Recast burst, where late-game income buys a newborn die four sides in a couple of seconds, is the *point* of the prestige — "replay the best two minutes with late-game income". The simulator reports sub-second gaps there because it does not model the game's own **700 ms `+ SIDE` lockout** (`tryBuy` returns early while `frozen()`), which is what actually bounds the burst on a phone: consecutive purchases cannot queue, so the morph never stutters.
-   - **The 600 s ceiling is the reference bot's.** Other always-open styles earn less per throw and are held to 780 s (measured: 619 s for a save-for-best-ROI tapper, 611 s for a pure idler). A player who declines the Recast forgoes the multiplier, so their side gaps are long by construction — 3777 s — and only the 45-minute rule of invariant 2 binds them.
-6. Lifetime coins stay inside exact double-integer range (tripwire for the plain-number currency helpers).
-
-Tune order if a milestone misses: side growth first, and only inside 1.90–2.30 — raise it if the run finishes early, lower it if milestones land late. Roller reach (`MAX_ROLLER_LEVEL` / `ROLLER_GROWTH`) is the lever for a dead tail, not for overall pace. Never touch `V(n)`.
-
----
-
-## 5. UI — 360 × 740 Portrait
-
-**Layout, top to bottom:**
-- **0–56 px:** coin counter, centred, tabular figures, lerps up over 180 ms. Tiny mute toggle top-right.
-- **56–120 px:** `MAX ROLL n`. Below it during buffs only: a small flame chip.
-- **120–470 px:** canvas. Die(s) on a ground line, dpr-scaled.
-- **470–740 px:** the shop — no menu, no tabs. Up to four full-width 64 px buttons stacked: `+ SIDE`, `ROLLER`, `+ DIE`, `RECAST`. Each shows icon, label, price, and a **progress ring that fills as coins approach the price**. Locked buttons show a **ghosted preview** (faint outline of the polygon you'd get). All targets ≥ 44 px, all thumb-reachable. **Purchases commit on release, not on press**, with a 12 px slide-off cancel — Android's own convention, and the reason a thumb crossing the shop on its way to the die cannot buy anything, RECAST included. An upgrade already owned never leaves the shop: ROLLER and + DIE stay visible after a Recast puts every die back to one side.
-
-**The canvas measures its own element, not the window.** `#shop` grows by 72 px every time a card appears, `#stageWrap` is `flex:1` and shrinks to match, and no `resize` event fires for that. With the backing store fixed at its boot height, `#stage`'s `inset:0; height:100%` box stretched a 602-tall bitmap into a 322-tall one — every polygon a flattened ellipse from the first purchase onward, which is exactly the `d1→d2` morph the build order says to validate first. A `ResizeObserver` on `#stageWrap` drives `sizeCanvas`, `refreshShop` calls it on both visibility transitions for browsers without one, and it early-returns when the box has not changed so calling it every frame is free. There is **no minimum logical height**: a 200 px floor against a shorter element reintroduced the same aspect break permanently on any viewport under ~618 CSS px. The payout float is likewise positioned and travels relative to `CH`, not a flat 150/70 px, or it slides off the top of a 360×640 phone.
-
-**Die drawing by side count** — regular S-gon resting edge-on on the ground line, circumradius `R = 96 + 2.2·min(S,20)` px (capped ~140; ×0.72 at D=2, ×0.58 at D=3). Horizontal layout is **one slot per die of exactly the width the fit-scale reserved**, die centred in its slot: the placement rule and the scale rule must use the same per-die budget or the dice overlap at 360 px on every phone. Face numerals sit inside their own edge, rotated parallel to it, at 0.62R, font `clamp(9, edgeLen·0.42, 34)`. Corner rounding `2 + S·0.35`.
-- `S=1`: circle with one chord sliced off the bottom (bespoke path).
-- `S=2`: lens, two arcs (bespoke path). Flips end-over-end.
-- `S=3..13`: regular polygon.
-- `S≥14`: stop labelling every facet; number only the 4 edges nearest contact, rest become ticks, landed value shown in the big readout.
-
-**Roll animation (RNG-first, animation-second — architectural law):** the simulation resolves a roll and returns a result object; the renderer only plays back a result it is handed. **In-place rotate to a fixed 12 o'clock notch**: 2 full turns + delta to bring the winning edge under the notch, easeOutQuart, 380 ms, with squash 1.00→0.88→1.06→1.00 and three alpha-ghost copies for motion blur. On landing: winning edge flashes white 120 ms, value floats up 70 px over 700 ms (white / cyan >100 / gold >10k).
-
-**Payout feedback is owed to the throw, not to the tween.** The settle is 380 ms but from roller Lv1 the rolls arrive every 370 ms or less, so a feedback hook that waits for the tween to finish simply never fires — floats, the land blip and the edge flash all vanish from Lv1 to Lv4, which is most of a session. Whichever happens first, the tween landing or the next throw starting, pays the previous one. *(Rolling along a ground line was rejected: 3× the code, highest ship-broken risk.)*
-
-**Add-a-side morph (600 ms, the money shot):** sample the S-gon and (S+1)-gon at **240 arc-length-parameterised points**, lerp point-for-point with easeOutBack (1.7). New edge draws in with a gold sweep; numeral stamps at 1.6×→1.0; expanding ring; 6px shake; MAX ROLL ticks; **every other element on screen is frozen for 700 ms**. The freeze is a *UI* freeze: auto-roll income keeps accruing through it and through any open panel, only the die tween, the float and the blip are held back. (Pausing income too cost 0.7 s of auto-roll on every `+ SIDE` — about 15 rolls at Lv8 — and all of it while a panel was up, with no offline credit to compensate because the page is still visible.)
-
-All outlines must start at the ground contact and wind the same way, or the lerp folds the shape through itself. The `S=2` lens is the one that is easy to get wrong: emit it contact → left tip → over the top → right tip → contact, the same order the polygon branch uses, not as two left-to-right arcs.
-
-**High-speed mode (>8 rolls/s):** per-roll animation replaced by a continuous blur; value numerals sprayed at a **throttled 8/s regardless of actual rate**; coin counter lerps. Constant per-frame cost.
-
-**Performance:** one canvas, one rAF; **cancel rAF entirely when nothing animates and on `visibilitychange`**. No physics, ever.
-
-**Numbers:** plain to 9999, then K, M, B, T, then aa, ab, ac… Two significant decimals.
-
-**Sound:** four WebAudio-synthesised blips generated in code (roll, land, buy, side-added). No files. Mute toggle persisted.
-
-**Palette:** charcoal background, bone-white die, amber landed facet, gold combos. Geometric, matte, adult. No mascot, no eyes, no nursery colours.
-
-**Save:** single versioned JSON (`v:1`), written on a 5 s debounce (a `setTimeout`, not the rAF loop — the loop stops when nothing animates, so a frame-counted debounce never fires in the pre-roller game) and on `visibilitychange`/`pagehide`. **Capacitor Preferences is the store and is read first at boot**, with a `localStorage` mirror as the fallback; an existing browser save is migrated into Preferences the first time the wrapper sees it. Reading only the mirror means an Android "clear storage" or an OEM cleaner wipes the player's run even though the durable copy is intact. Anything that gets past the version check is coerced and clamped on load, because localStorage is player-editable and one `NaN` in `coins` locks out every purchase forever.
-
-**Buff clocks are absolute wall time** (`Date.now()`), stored and restored. On the page-local clock they reset to zero on every load, so the Hot Hand cooldown was unenforceable: watch the ad, take the ×3, refresh, watch again. A restored buff is clamped to its own full length, and a cooldown further away than its own length is treated as finished, so neither direction of clock jump can be farmed.
+### Invariants the headless sim must assert
+1. **Income never drops after any purchase** over the *reachable* shape set (what `+ SIDE`, `×2`, `JACKPOT`, `+ DIE` and a Recast can actually produce), including a Recast taken at threshold. Single-press residue ≤ 2%, cumulative dip ≤ 3.5%. The only known negative is growing the smaller of two level dice thinning a match; the `n ≥ 6` participation floor keeps it inside those bounds.
+2. **No dead zone over 4 minutes** for an always-open player — asserted on every policy, including one that never presses RECAST, *up to the moment RECAST lights and that player turns it down*. The 1.16 side curve is what makes this bound possible: there is essentially always a cheap next side. After declining the reset, a hoarder is grinding 16×-priced third-die upgrades at a multiplier the game offered to raise, and `sim.js` measures and prints those gaps (21 of them, longest 10.3 min) as *off-curve* rather than gating on them. The bound used to "hold" for that player only because `sideTarget` froze them out of `+ SIDE` entirely so they had nothing to buy at all — a worse outcome than a gap, and the reason the rule changed.
+3. `+ SIDE` is never strictly dominated by ROLLER.
+4. **Doubles/triples contribution ≤ 15%** of coin-weighted income across the run; instantaneous peak bounded at 35% over all reachable shapes.
+5. **Jackpot share ≤ 75%** of any single die's income (structural, but assert it — a broken gate is silent otherwise).
+6. **Lifetime coins < 1e15** (tripwire for the plain-number currency helpers; measured peak 4.71e9 on the jackpot beeline, which banks tier after tier for ten hours, and 4.94e8 on the reference bot — the peak is taken across *every* policy the sim runs, not just the reference one. That leaves five and a half orders of magnitude of headroom against the 9.01e15 exact-integer limit, which is ample for a 3-dice / 100-side / 6-tier cap, and no bignum is needed).
 
 ---
 
-## 6. Rewarded Ads (no-op adapter)
+## 5. Rendering
 
-All ads go through one stub:
-```js
-Ads.show(id) -> Promise<void>   // prototype: resolves after 300ms; Ads.forceFail toggle for testing
-grantReward(txId, fn)           // idempotent by txId
-```
-**Rule (non-negotiable):** write the pending-reward record to the save **before** calling the SDK, call with a 6 s timeout, and grant the reward on success, failure, timeout, no-fill, or resume-with-pending-record alike. A failed ad costs the player nothing and is never noticed.
+**Shape by side count** — regular n-gon resting edge-on on the ground line. `R = min(92 + 0.55·n, 140)` px; ×0.72 at D=2, ×0.58 at D=3.
+- `n=1` circle with one chord sliced off the bottom; `n=2` lens (emit contact → left tip → over the top → right tip → contact, same winding as the polygon branch).
+- `n=3..13` full polygon, every face numbered inside its own edge, rotated parallel to it, at 0.62R.
+- `n=14..39` numerals only on the **4 edges nearest the 12-o'clock marker**; the rest become tick marks.
+- `n=40..100` reads as a near-circle: ticks every `ceil(n/40)` edges, plus a **value window** at the marker showing the landed number in large type. The window is how a 100-sided die stays legible; it is not a fallback.
 
-**The grant function reads everything it needs from the record's payload, never from memory.** A resumed reward runs on a fresh page where the in-memory away-time is still 0, so a signature-less `applyOfflineDouble` grants exactly zero coins for an ad the player already watched, and clears the record either way. Resume runs *after* the welcome-back card opens, so the doubled amount lands on the card the player is looking at.
+**Roll (RNG first, animation second).** Simulation resolves the roll and hands the renderer a result. In-place rotate to the fixed 12 o'clock marker: 2 turns + delta, easeOutQuart, 380 ms, squash 1.00→0.88→1.06→1.00, three alpha ghosts. **Whichever comes first — the tween landing or the next throw — pays the previous throw.**
 
-**Exactly two placements. Neither can appear in the first session** (both gated behind a completed Recast or a return after ≥30 min away):
-1. **OFFLINE DOUBLE** — on the welcome-back card: rate 0.5→1.0 and cap 4 h→8 h for that claim.
-2. **HOT HAND** — ×3 payouts for 2 min, player-initiated from a small flame chip, 20 min cooldown, never a popup, never covers the die.
+**Fast-roll mode (> 8 rolls/s).** The polygon never stops: continuous spin blur at a rate proportional to the real roll rate, with a **strobed snap** 8×/s that holds a legible number in the marker window for ~60 ms. It still reads as a spin at any speed. Floats throttled to 8/s; skipped payouts are merged and shown as one summed float. Constant per-frame cost.
 
-No interstitials. No banners. No IAP. The store description can honestly say "no purchases, ads optional."
+**Landed face.** Shown by **position** (it is under the marker) plus a 120 ms white edge flash. **Never by colour.** Colour means face *type* only:
 
----
+| type | fill | mark |
+|---|---|---|
+| normal | bone / theme fg | none |
+| ×2 (×3) | cool tint | small `×2` tag on the edge |
+| jackpot | gold | ★ |
 
-## 7. Slot Reskin Seam
+**Payout floats are per-die**, anchored to that die's screen x, rising 70 px over 700 ms (relative to canvas height, never a flat pixel offset). White / cyan > 100 / gold > 10k. Jackpot floats are gold with ★ and trigger a screen-space coin sparkle.
 
-Build the seam, build **zero** slot code.
+**Doubles burst.** Matched dice pulse a gold rim; `DOUBLES ×2` / `TRIPLES ×3` bursts once at the midpoint, 500 ms; then the per-die floats show the multiplied values. No thread, no line, no ambient graphic between dice ever.
 
-1. **Data:** a face is a value plus a theme-supplied label. The simulation reads values only and never contains the strings "dice", "side" or "face" in any user-visible position.
-2. **Renderer:** all drawing goes through `THEME = { drawDie(ctx, die, state), faceLabel(i), palette, strings, currencyName, sounds }`. Dice theme is the only implementation shipped. The slot theme replaces rotate-and-settle with translateY-and-settle on the same easing, reusing the settle bounce and number pop verbatim.
-3. **Scoring:** combo is already an evaluator over a landed-index array — that *is* a single-payline evaluator. Multi-reel paylines are extra index sets over the same array.
-4. Every economy formula and constant carries over unchanged. `+ SIDE` becomes `+ SYMBOL` on the identical ladder: a reel that starts with one symbol and grows.
+**Add-a-side morph (600 ms, the money shot).** 240 arc-length-parameterised points, point-for-point lerp, easeOutBack 1.7, gold sweep on the new edge, numeral stamps 1.6×→1.0, expanding ring, 6 px shake, **UI frozen 700 ms** (income keeps accruing).
 
----
+**Visual pass (no external assets, same canvas):**
+- **Extruded rim** — a 4–6 px offset copy of the polygon behind the face, darkened, giving depth.
+- **Soft lighting** — one linear gradient across the face plus a faint specular arc on the upper-left edges.
+- **Landing burst** — dust/spark particles at the contact point, count and radius scaled by `payout / E(die)`.
+- **Jackpot sparkle** — screen-space coin glints, 900 ms.
+- **Tumble easing** — easeOutQuart plus a 40 ms overshoot settle.
 
-## 8. Policy Guardrails
-
-- **One currency, earned only by rolling.** Never purchasable with real money, never redeemable, transferable, or convertible. This single rule keeps the app entirely outside Play's Real-Money Gambling policy.
-- **Every price fixed and displayed. No randomized purchase, mystery face, or crate of any kind** — loot-box odds disclosure never applies.
-- **Declare 13+ target audience. Never opt into Designed for Families.** Keep art geometric and adult; no childlike imagery or "for kids" wording anywhere in the app or listing. Google assesses the declared audience against the actual art, and a mismatch is a suspension ground.
-- **Dice build: answer the IARC simulated-gambling questions "no" — honestly.** A plain numbered die with deterministic purchases is not casino simulation.
-- **Slot build, if ever: separate Play listing, never an in-app mode.** Declare simulated gambling honestly (expect Teen/12+), use abstract original symbols only, no real casino brands/logos/trade dress, add the disclaimer string ("No real-money gambling. No prizes of real-world value. Intended for users of legal gambling age"), no cash-out/sweepstakes/tournament-with-prize. Ship dice first and measure real rewarded eCPM for a month before building it — AdMob may classify slot inventory as gambling-related and cut fill.
-- No paid user acquisition for a slot build without Google Ads social-casino certification.
+One canvas, one rAF, cancelled when nothing animates and on `visibilitychange`. No physics, ever. `ResizeObserver` on `#stageWrap` drives `sizeCanvas`; no minimum logical height.
 
 ---
 
-## 9. Out of Scope
+## 6. UI — 360 × 740
 
-Per-face editing, face types, effect faces (×2 / reroll / wild / chain), face swapping. A FILE/pip/sharpen sink of any kind. Tap-an-edge-to-select or any hit-testing on the die. Achievements, statistics, pause screen. Daily die, streaks, streak forgiveness, tokens, any calendar-date logic. Heirloom/retained faces or any deferred hidden state. Night Die, shard shop, skill trees, a second currency. Cards, decks, duels, quests, events, roulette, minigames. More than 3 dice, more than 20 sides, more than 3 prestige layers. Rolling-along-the-ground animation, 3D, WebGL, physics engines, any imported library. Monte Carlo EV. Interstitials, IAP, currency packs. Cloud save, accounts, leaderboards, any server. Push notifications. Localization, tutorial text, cutscenes. Settings beyond mute and a hold-to-confirm hard reset. Landscape, tablet, iOS. The slot build itself — only the THEME seam ships. Capacitor wrapping and AdMob integration — the prototype must be fun in a phone browser first.
+- **0–52 px.** Coin counter, centred, tabular, lerps over 180 ms. **Top-left:** sun/moon theme toggle (real toggle, persisted, both modes built from one token set — `--bg --surface --fg --dim --accent --gold --tint --danger`). **Top-right:** mute, then gear (settings). A palette chip appears beside mute once the first skin is affordable.
+- **52–112 px.** `MAX ROLL n`. Hot Hand chip when available.
+- **112–470 px.** Canvas.
+- **470–740 px.** The shop. No tabs, no menu. Full-width 64 px cards: icon, label, fixed price, progress ring filling toward it. Locked cards show a **ghosted preview** of what you'd get. **At most 4 cards on screen**: `+ SIDE` pinned top, `RECAST` pinned bottom when lit, the middle two are the cheapest unlocked of `×2 SIDE`, `JACKPOT`, `×3 TIER`, `ROLLER`, `+ DIE`. Purchases commit **on release**, 12 px slide-off cancels. Owned upgrades never leave the shop.
+- **SKINS panel.** One screen, one grid, 2 rows × 3 swatches, each drawn live (a mini die, a mini background). Each swatch shows price, or `OWNED`, or `EQUIPPED`. Under each row: `2 / 3 · COMPLETE FOR +10% INCOME`, filling to `+10% ACTIVE`. **No sub-menus, no tabs, no categories beyond those two rows.**
+- **Settings (gear).** Mute, theme, hold-to-confirm hard reset, version. Nothing else.
 
-**Build order:** d1→d2→d3 morph with placeholder art **first**. If that transition is not satisfying on the actual phone, stop and rethink before writing anything else.
+All targets ≥ 44 px, all thumb-reachable.
+
+---
+
+## 7. Rewarded Ads — unchanged
+
+`Ads.show(id)` stub; pending record written to the save **before** the SDK call; 6 s timeout; grant on success, failure, timeout, no-fill or resume alike; `grantReward` reads only its payload. Exactly two placements, neither in the first session (gated behind a Recast or a ≥30 min return): **OFFLINE DOUBLE** and **HOT HAND**. No interstitials, banners or IAP.
+
+---
+
+## 8. Slot / Wheel Reskin Seam
+
+Build the seam, build zero slot code. All drawing goes through `THEME = { drawFace, faceLabel(i), palette, strings, sounds }`; the simulation reads values only and contains no user-visible "dice"/"side"/"face" strings.
+- **A wheel is this n-gon viewed from above.** Same polygon, same uniform landed index, same marker — the marker becomes the pointer and the projection drops the extruded rim. Nothing in the economy changes.
+- **A reel is a die with symbol faces.** `faceLabel(i)` returns a symbol; rotate-and-settle becomes translateY-and-settle on the same easing. `×2 SIDE` becomes a boosted symbol, `JACKPOT SIDE` the jackpot symbol, `+ SIDE` becomes `+ SYMBOL`.
+- Doubles is already an evaluator over the landed-index array — that *is* a single payline. Multi-reel paylines are extra index sets over the same array.
+
+Slot build, if ever: **separate Play listing, never an in-app mode.** All v1 policy guardrails carry over verbatim.
+
+---
+
+## 9. Long-Term Multi-Dice Layout (designed now, built later)
+
+v2 ships **3 dice maximum**. The layout rule is defined ahead of time so it is never improvised:
+
+| dice | arrangement | scale |
+|---|---|---|
+| 1–3 | one row | 1.00 / 0.72 / 0.58 |
+| 4 | 2 × 2 | 0.50 |
+| 5–9 | 3 × 3 | 0.38 |
+| >9 | **hard cap at 9** | — |
+
+One slot per die of exactly the width the fit-scale reserved, die centred in its slot; the placement rule and the scale rule read the same per-die budget. Past 9 dice the readable answer is not more polygons but a different object — out of scope, and the cap is what keeps it honest.
+
+---
+
+## 10. Out of Scope
+
+Per-face editing, face swapping, reroll/wild/chain faces, a third face type. More than 3 dice, more than 100 sides, more than 3 Recasts, more than 6 jackpot tiers. Achievements, dailies, streaks, quests, events, minigames, a second currency, a shard shop. Skins beyond the two 3-item categories; skin rarity, crates, or any randomised purchase. Cloud save, accounts, leaderboards, servers, push notifications. Localisation, tutorial text, cutscenes. Landscape, tablet, iOS. 3D, WebGL, physics, imported libraries, Monte Carlo EV. Interstitials, IAP. Capacitor and AdMob integration — **the prototype must be fun in a phone browser first.**
+
+**Build order:** the 1→2→3 side morph on the real phone, then the 100-side near-circle with its value window, then the jackpot landing. If any of those three is not satisfying on the device, stop and rethink before writing anything else.
+
+---
+---
+
+# Appendix A — what the build changed, and why
+
+*Not part of the spec above. This is the record of every place the shipped code
+disagrees with it. The spec grants the simulator the right to tune `SIDE_GROWTH`;
+everything else here is a defect the sim found in the spec's own numbers, with
+the measurement that forced the change. `node sim.js` reproduces all of it.*
+
+## A1. Cost constants
+
+| Constant | Spec | Built | Why |
+|---|---|---|---|
+| `SIDE_BASE` | 10 | **13** | At 10 the opening drip was 4.3 s a side and six sides landed at 0.38 min against the spec's own 0.6 target. 13 gives the ~6 s cadence section 2 describes. |
+| `SIDE_GROWTH` | 1.16 | **1.13** | Inside the 1.12–1.20 band the spec allows. At 1.16 the hundredth side costs 20.7M and the side track costs 3.1B per run against a peak income of 13M/min: the bot reached 100 sides at t=382 min against a 105 target and sat in **26 dead zones, the longest 131 minutes**. |
+| `X2_BASE` | 120 | **90** | Puts the first ×2 at 1.4 min against the spec's 1.2. |
+| `X2_GROWTH` | 2.60 | **2.00** | At 2.60 the twelve-step track spans 120 → 4.4M, a 37,000× cost range for a track the spec itself values at +22% income on a 100-side die. Its last purchases were the worst coins in the game. |
+| `TIER3_MULT` | 25 | **6** | The ×3 tier is worth about +7% on a 100-side die. At 25× the last ×2 it cost 23M on die 3 and measured as a single **131-minute wait** — on its own, most of the prototype's stated length — for a 7% raise. |
+| `ROLLER_GROWTH` | 3.00 | **2.70** | The twelfth roller level at 3.00 costs 106M: the single most expensive thing in the game and the last dead zone in every run. |
+| `RECAST_AT` | 250,000 | **840,000** | The bot cleared 250k at t=20 min against a 34-minute target; 420,000 landed it at 25.7. The doubled 840,000 pays for the flat shard payout of A9 and lands the first Recast at 36.33 — 1.07× the 34-minute target, inside the band. |
+| `JACK_BASE` | 2,500 | **4,000** | At 2,500 a player who buys only the sides the jackpot gate demands reached the game's headline moment at 4.06 min against a 9-minute target — outside the band on the fast side, and it burns the reveal before the ×2 track has started. 4,000 moves the reference bot to 10.41 and that beeline to 5.10. 5,500 pushes the reference bot outside the band the other way. |
+| `SHARD_COEF` | 12 | **16** | See A9. |
+| `SHARD_RATIO_CAP` | — (new) | **1** | See A9. |
+
+Published ladders after the change (die 1): sides `13 15 17 19 22 24 28 31 35 40
+45 50 57 64 72 82 92 104 118`, n=50 → 4,589, n=100 → 2,068,383. ×2 `90 … 184,320`.
+×3 tier 1,105,920. Roller `600 … 33,354,364`. Everything else — the jackpot
+ladder, `+ DIE`, skins, offline, Hot Hand — is exactly as printed above.
+Jackpot costs after the change (die 1): `4,000 11.20K 31.36K 87.81K 245.86K
+688.41K`.
+
+## A9. The shard payout is FLAT — every run is worth exactly 16 shards
+
+Spec: `shards = floor(12 · (runCoins/threshold)^0.45)`, unbounded in the ratio.
+Built: `SHARD_COEF = 16`, `SHARD_RATIO_CAP = 1` and `RECAST_AT` doubled to
+840,000. The ratio saturates at 1, so a run pays exactly 16 shards and the game
+exactly 48 — `M ×8.20`, or ×9.84 with both skin sets — the moment the card
+lights.
+
+The number of Recasts is capped at 3 and the per-press payout was not, so the
+only correct play was to bank as long as possible, and the RECAST card lighting
+at exactly the threshold was the game's own "show, don't tell" signal telling the
+player to take the worse action. Measured with identical buying at 1.7 taps/s:
+pressing at the threshold ended content at 132.7 min with `M ×7.68`; waiting for
+twice it ended at 128.6 with ×9.84. Faster *and* 28% stronger — dominance on both
+axes, not a trade-off.
+
+**Clamping the ratio at 2 did not fix that, and this appendix used to claim it
+did.** A cap only moves the ceiling; every coin banked *up to* the cap still paid
+more (12 shards at 1.0×, 13 at 1.25×, 14 at 1.5×, 16 at 2.0×), so waiting still
+won on both axes — 88.7 min / 36 shards / ×7.68 pressing at the threshold against
+86.0 / 48 / ×9.84 waiting for 2×.
+
+A flat payout removes the incentive instead of bounding it. `sim.js` now asserts
+this directly rather than arguing it in prose: the `hoard-2x` policy buys exactly
+what `optimiser` buys and differs only in waiting for twice the threshold, and it
+finishes at **100.5 min with the same 48 shards and the same ×9.84** against the
+optimiser's 86.1. Waiting costs 14 minutes and buys nothing. The lit button is
+the best button *by construction*.
+
+The card says so by having nothing more to offer: once RECAST is lit it reads a
+fixed `+16 SHARDS` over a plain progress ring, with the run counter as its price.
+No rising number, no second bar, nothing to explain.
+
+## A2. The match multiplies the matched dice, not the whole throw
+
+Spec section 4 writes `payout = (Σ_d faceValue) · combo · M`. Built as
+`paid[d] = faceValue_d · (d matched ? combo : 1) · M`.
+
+The spec's form makes the bonus scale with a die that took **no part** in the
+match. With dice at 100 and 6 sides — reachable, because `+ DIE` appends a
+one-sided die and the auto-target then grows it — the 6/6 match was worth a
+multiple of the 100-side die's average, and growing one of the small dice thinned
+it enough to cost **7.5% of income over 13 consecutive presses**. That is the
+coin counter going backwards for minutes on the only button the player has, which
+is exactly what invariant 1 forbids, and no participation floor fixes it.
+
+It is also what the screen already shows: two dice glowing, two multiplied floats
+over them, and nothing over the third.
+
+## A3. A die on its own jackpot face sits the match out entirely
+
+`comboEligible(die, i)` is false on a jackpot face, and `matchedSet`, `comboFor`,
+`setOwnEV`, `maxRoll` and `roll` all read it. One jackpot face is worth thousands
+of ordinary ones; letting a match land on it made the match bonus dwarf
+everything else and reopened the same monotonicity hole as A2. The rule is one
+sentence to a player — *the jackpot pays the jackpot, it does not also pay
+doubles* — and the gold star float and the DOUBLES tag never argue over the same
+coins.
+
+**The first build only did the economy half.** `comboFace` zeroed the *payout*
+contribution, but `comboFor` and `matchedSet` still compared raw landed indices,
+so the match was still **declared**: two dice that each owned a jackpot and both
+landed index 0 glowed gold and burst a full `DOUBLES ×2` tag between them while
+multiplying nothing at all. The game announced a multiplier it had not paid,
+which is the worst form of the "i dont know why some are randomly 2x" confusion
+this appendix exists to close. Excluding the die from the *set* rather than
+zeroing its *value* makes the paid match and the drawn match the same object:
+fewer than two dice left means combo 1, no tag and no glow.
+
+## A4. The jackpot side gate is solved, not printed
+
+Spec: `gate = ceil(JACK_MULT(t)/3)` → 3, 6, 10, 19, 35, 66.
+Built: the smallest `n` at which the jackpot's share of that die is actually
+≤ 75%, floored at the 12-side unlock → **12, 12, 12, 19, 36, 67**.
+
+The printed gate breaks its own bound: tier 5 at 35 sides takes 75.03%, tier 1 at
+3 sides takes 76.2%. Solving the inequality directly makes invariant 5 structural
+instead of approximate, and the ladder moves by at most one side.
+
+`JACK_MULT` is `ceil`, as the formula says, so tiers 5 and 6 are **105 and 199**;
+the spec's table prints 104 and 198, which is `round`. The formula won.
+
+## A5. Two milestone targets
+
+- **20 sides: 7 min → 1.5 min.** The spec's own opening script has sides arriving
+  every ~6 s on a near-flat drip, which puts the twentieth side just under two
+  minutes. 7 minutes would need sides to cost roughly four times what the spec's
+  own side law prices them at. The design is right; the table was not.
+- **50 and 100 sides are measured on the final run.** A Recast puts every die back
+  to one side on purpose, so "50 sides on die 1" first happens at minute eight on
+  a die the player is about to melt down. The spec's table runs these two *after*
+  the first Recast and *before* the end of content, so what is measured is the die
+  the player finishes with.
+
+Every other target in the table is hit as written.
+
+## A6. Invariant 1 is asserted over a lattice superset
+
+The spec says "the reachable shape set". The build scans every combination of
+side counts on a coarse ladder (1–14, then 16 … 100) for one, two and three dice,
+crossed with five upgrade profiles — 91,390 shapes, a strict superset of what is
+reachable. Testing a superset is stronger than testing the reachable set and does
+not need an argument about which shapes `+ DIE` and a Recast can produce. The
+played path of all six policies is checked exactly, on every purchase, as well.
+
+## A10. `+ SIDE` falls through the `COMBO_MIN_SIDES` cliff
+
+`sideTarget` always targeted the die with the fewest sides. The press that takes
+a die from 5 to 6 joins it to the match and thins the match it joins, so it is
+the one forced purchase that can lower income — measured at −1.19% on 18/18/5
+down to −0.23% on 100/100/5, always recovered by the next side. The dip itself is
+inside invariant 1's 2% bound and is fine.
+
+What was not fine is what it did to a player who declines income-negative
+purchases. Because the smallest die was the *only* target the rule would ever
+offer, that player was locked out of `+ SIDE` on **every** die, not just the small
+one. Three of the eight simulated policies parked at big/big/5 — never-prestige
+froze at 60/59/5 and made zero purchases of any kind for the following 400
+minutes — with dice 1 and 2 capped at 60 sides and the jackpot stuck at tier 5.
+Roughly half the prototype was unreachable for a player who does not prestige,
+which is the single most common idle-game behaviour. The reference bot never saw
+it only because a Recast resets all three dice at once, so they grow in lockstep.
+
+Built: among dice under `MAX_SIDES`, smallest first, take the first whose `+1`
+does not lower `expectedPayout`, falling back to the smallest if none qualify.
+Four lines. The reference bot is unaffected to two decimal places on every
+milestone, and the hoarder now reaches 100/100 sides and jackpot tier 6. See
+invariant 2 for the dead zones that appear once that player is no longer frozen —
+they are real, and they are better than nothing to buy at all.
+
+## A7. Rendering
+
+- **The marker is at 12 o'clock and the landed face is the top face.** Section 5
+  says both "resting edge-on on the ground line" and "rotate to the fixed 12
+  o'clock marker". v1 put the marker at the ground, where the landed numeral sits
+  under the die. The shape still rests on the ground line; the face you read is
+  the one under the marker at the top, which is also what section 8 needs when
+  that marker becomes a wheel's pointer.
+- **Outlines start at the midpoint of face 0, not at the bottom of the shape.**
+  Starting at the bottom inserts a chord straight through the middle, and the
+  3→4 morph — the first thing a new player sees — lerped through a
+  self-intersecting bowtie. `check.js` now asserts that every outline is a closed
+  walk no longer than its own perimeter, and that every morph moves each of its
+  240 points smoothly.
+- **The landing flash is the theme accent, not white.** White on a white face in
+  light mode is not a flash.
+- **The palette chip sits beside the theme toggle on the left**, not beside mute.
+  Three controls on the right ran a six-figure coin counter straight under them.
+- **The morph keeps the money shot above 13 sides.** `drawFaceMarks` used to bail
+  out entirely while `morphPts` was set on a die over 13 sides, so every side
+  purchase from the fourteenth on — almost all of them — morphed into a blank
+  polygon and lost the 1.6×→1.0 numeral stamp section 5 calls the money shot.
+  Only the per-edge ticks and the four `near`-mode numerals genuinely cannot be
+  placed on an interpolating outline. The stamp is drawn during the morph, and on
+  a near-circle (40+ sides, where there is no rim to stamp) the **value window**
+  pops the new highest face instead.
+- **Doubled and jackpot faces wear a pip on the rim**, not only a tick. Past 13
+  sides the wedge tint is a few degrees wide and the tick is one line among a
+  hundred; a filled dot survives any side count. The first `×2` and the first
+  `JACKPOT` ever bought also print one line naming the colour, once each.
+- **Payout floats use five lanes and round rather than floor.** A human tapping
+  at their own pace lands four to six floats inside one 700 ms lifetime, so three
+  lanes still stacked two deep. `fmt` floors, which is right for a balance the
+  player must not be told they have more of than they do and wrong for a payout:
+  after one Recast `M` is 3.40 and a face worth 3 pays 10.20, so every float
+  under-reported by up to a coin while the counter climbed the true amount.
+- **Shop cards shrink to 58 px below 700 px of viewport height.** Four 64 px
+  cards plus gaps and padding is 298 px against the 270 px section 6 reserves; on
+  a 360×640 device that left the canvas 230 px and `fitScale` resolved a 100-side
+  die to an 8.8 px edge. 64 px is the smallest comfortable thumb target, so it is
+  kept wherever there is room.
+- **The theme is written to a synchronous `localStorage` key as well as the
+  save**, and a tiny inline script in `<head>` applies it before first paint. The
+  save is still the source of truth; under Capacitor it arrives through an IPC
+  round trip, so a light-mode player used to see a full dark page and a dark
+  status bar on every launch.
+
+## A11. Wall-clock buffs are re-clamped at read time, not only at load
+
+`sanitise()` clamped `hotUntil` on load, which left the whole running session
+open: take a Hot Hand, wind the device clock back an hour without reloading, and
+`Date.now()` sits an hour below `hotUntil` — `×3` on every roll, up to 54 a
+second, until the next reload. `hotLeftMs()` is now the only place the game layer
+reads `hotUntil`, it pulls the value back to at most `HOT_DURATION_S` whenever it
+is read, and it runs every frame and before every throw.
+
+`OFFLINE_CAP_AD_S` was dead. `applyOfflineDouble` doubled the figure that had
+*already* been clamped to the four-hour cap, so an eight-hour absence paid 14,400
+rate-seconds where the spec says 28,800 — exactly half — and it was the one place
+the game computed currency outside ECON. The raw away time is now kept on the
+save and the doubled figure comes from `E.offlineEarnings(st, away, true)`, which
+applies the ad rate *and* the ad cap. `pendingOfflineAway` is only incremented
+when the absence actually produced a claim, so a hundred 20-second app switches
+no longer bank phantom away time against no coins.
+
+## A8. Not built
+
+- **`c_hat`** appears in the spec's `income/s` line as an approximation.
+  `expectedPayout` integrates the match exactly, so there is nothing to
+  approximate and no `c_hat` anywhere in the code.
+- **The `V(n)` deletion is complete.** Nothing in the build knows the 1.55 ladder
+  existed, except the v1 save migration, which keeps a die's side count and throws
+  its old face values away.
