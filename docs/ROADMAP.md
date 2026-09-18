@@ -32,7 +32,7 @@ Order of work. Most of these are one-time costs shared with every future app on 
 3. **Saves on device:** the code already writes to Capacitor Preferences as well as the browser store; verify on a real device.
 4. **Play Console (Nate's existing personal developer account; details in the local Project Hub):**
    - create the app;
-   - register it for Android developer verification (Google's notice gave a September 30, 2026 deadline; check whether it still applies);
+   - register its package name for Android developer verification (checked 2026-09-18: nothing is due before the app exists);
    - content rating questionnaire: answer honestly; the dice version has no simulated gambling;
    - target audience 13+, not Families;
    - Data safety form: the ad SDK collects data, so disclose it; privacy policy page required;
