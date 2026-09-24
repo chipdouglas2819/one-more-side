@@ -1,4 +1,4 @@
-# ONE MORE SIDE — prototype v2.1
+# ONE MORE SIDE — prototype v2.2
 
 A one-thumb idle game for Android. You start with a die that has **one side**.
 Every coin buys it another side. A six-sided die reads **1 2 3 4 5 6**, exactly
@@ -42,14 +42,16 @@ save edits from a page where the game is not running, or use the dev buttons.
 
 ## What the player does
 
-1. **Tap the die.** It spins and lands on a face. That face's number floats up
-   *from that die* and goes into your coins.
+1. **Tap the die.** It hops, turns in the air and lands on a face. That face's
+   number floats up *from that die* and goes into your coins. A one-sided die
+   has nowhere else to land, so a tap only rocks it; a two-sided one flips over
+   like a coin.
 2. **Buy the card at the bottom.** `+ SIDE` is always the first one. The shape
    visibly grows an edge — one side becomes a lens, then a triangle, then a
    square.
 3. Around nine sides, **`×2 SIDE`** appears. It permanently doubles your highest
-   face. That face turns blue and wears a small `×2` tag. Buy it twelve times and
-   the twelve highest faces are all doubled.
+   face. That face gets a blue band along its edge with a small `×2` tag on it.
+   Buy it twelve times and the twelve highest faces are all doubled.
 4. Around twelve sides, **`JACKPOT SIDE`** appears. It turns the die's `1` — the
    worst face — into a gold star that pays a big multiple of the die's average.
    There is only ever **one** jackpot face per die. Buying it again makes it pay

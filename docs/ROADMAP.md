@@ -1,6 +1,6 @@
 # Roadmap
 
-Last updated: 2026-09-18
+Last updated: 2026-09-24
 
 ## Done
 
@@ -9,18 +9,26 @@ Last updated: 2026-09-18
 
 - **v2.1 (published 2026-09-18):** hold-to-buy with a speed ramp; purchases during a hold play as one smooth swell with no freeze or shake; a Recast screen of numbers and icons only. Also fixed from re-checking v2: two matching dice were labelled TRIPLES; an economy dead end at 100/100/5 sides; a rarer one at 8/8/8 (the x2 side now unlocks at 9 sides); a light-mode launch flash; faint x2 and jackpot marks on dark skins; Hot Hand's cooldown looking active.
 
+- **v2.2 (2026-09-24, not yet published):** the dice themselves, from Nate's v2.1 feedback. x2 and jackpot faces wear a band along their own edge (no wedge, no thick tick, no pip) in colours chosen per skin, with the tag and star on the band and the numerals upright on each face's apothem. The roll is a throw sized to the roll interval: the die hops, turns in the air, lands flat with a squash and pays at touchdown, so under the roller every result visibly lands; motion blur and numeral fade follow the real speed. The two-sided die flips over like a coin; the one-sided die cannot be flipped and rocks on its flat instead. Each has its own sound. No economy number changed.
+
 ## Now
 
-- Nate plays v2.1 on their phone.
+- Nate plays v2.2 on their phone: the throw under the roller, the coin, the rocking disc, and the bands on every skin.
 - `PRODUCTION_HANDOFF.md` is written (2026-09-18). Nate reviews its section 11, open decisions; saying "defaults" accepts all of them.
+- Pacing: `research/pacing-review-2026-09-24.md` is written; balancing waits until Nate has played v2.2.
+
+## Testing note
+
+Since v2.2, animation changes are checked frame by frame before publishing: a Playwright harness drives headless Chromium at 375x812, captures every painted frame over the DevTools protocol and tiles them into contact sheets, and a second script screenshots all 18 skin and theme combinations (3 die skins x 3 backgrounds x 2 themes). Neither is part of the game. They show what a 16 ms frame contains; they do not show how it feels, so every visual change still needs Nate's phone.
 
 ## Open questions only Nate can settle by playing
 
-- Does the fast-roll presentation feel like "a full dice spin" at roller level 3 and up? (Feedback F7)
+- Does the throw read as a real roll at every roller level, and does fast-roll mode (over 8 rolls a second) still read as a spin? (Feedback F7, reworked in v2.2)
+- Pacing: when should the second die and each upgrade arrive? The analysis, with candidate changes measured in the simulator, is `research/pacing-review-2026-09-24.md`. Balancing is deferred until Nate has played v2.2.
 - Do 30-, 60- and 100-sided dice look good on their actual phone? (F8)
 - Is the stretch between 5 sides and the auto-roller too grindy? (Flagged by two v1 testers)
 - During a long hold on a die with 40 or more sides, the number window counts up the new top face instead of showing rolls. Keep it or change it?
-- On a 100-sided die the jackpot face is a thin sliver. Should it get a minimum width or a pulse the first time it lands?
+- On a 100-sided die the jackpot face is a gold notch on the rim since v2.2. Does it need a pulse the first time it lands? (F16)
 - Does the hold ramp (first repeat at 0.35 s, up to 15 buys a second) feel right under a thumb?
 
 ## Next: Android
@@ -58,7 +66,7 @@ Nate expects people to play "a year or two". The prototype has about two hours, 
 ## Known limits of the prototype
 
 Full lists are in `research/verification-history-v1.md`, `research/verification-history-v2.md` and `../SPEC.md` Appendix A.
-- Fast-roll mode shows the landed number in brief flashes rather than a full spin.
+- Fast-roll mode (over 8 rolls a second) is still a continuous spin with the landed number strobed in 8 times a second, not a throw per result; v2.2 keeps faint numerals between strobes and gives each strobe a small bob.
 - Never tested on a real low-end Android phone with three 100-sided dice at top roller speed.
 - A player who never uses Recast progresses very slowly late in the game.
 - Content ends at about 130 minutes.

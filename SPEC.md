@@ -150,21 +150,34 @@ attempt to fix it with constants.
 
 **Shape by side count** — regular n-gon resting edge-on on the ground line. `R = min(92 + 0.55·n, 140)` px; ×0.72 at D=2, ×0.58 at D=3.
 - `n=1` circle with one chord sliced off the bottom; `n=2` lens (emit contact → left tip → over the top → right tip → contact, same winding as the polygon branch).
-- `n=3..13` full polygon, every face numbered inside its own edge, rotated parallel to it, at 0.62R.
+- `n=3..13` full polygon, every face numbered upright on its own apothem, inside the band. Numerals never rotate with the face (`UPRIGHT_NUMERALS = true`, a Claude call Nate can overturn), and they sit on the apothem rather than at a fixed 0.62R so a numeral stays inside a triangle, whose apothem is 0.5R.
 - `n=14..39` numerals only on the **4 edges nearest the 12-o'clock marker**; the rest become tick marks.
-- `n=40..100` reads as a near-circle: ticks every `ceil(n/40)` edges, plus a **value window** at the marker showing the landed number in large type. The window is how a 100-sided die stays legible; it is not a fallback.
+- `n=40..100` reads as a near-circle: ticks every `ceil(n/40)` edges, plus a **value window** at the marker showing the landed number in large type. The window is how a 100-sided die stays legible; it is not a fallback. It uses the skin's band colours for a ×2 or jackpot result.
 
-**Roll (RNG first, animation second).** Simulation resolves the roll and hands the renderer a result. In-place rotate to the fixed 12 o'clock marker: 2 turns + delta, easeOutQuart, 380 ms, squash 1.00→0.88→1.06→1.00, three alpha ghosts. **Whichever comes first — the tween landing or the next throw — pays the previous throw.**
+**Roll (RNG first, animation second).** Simulation resolves the roll and hands the renderer a result. The roll is a **throw**: the die hops off the ground line, turns in the air to the fixed 12 o'clock marker, and lands flat under it with a squash anchored at the contact point, plus its dust. The turn is sized to the time it has, `THROW = { TAP_S 0.42, MIN_S 0.16, TURN_S 0.34, HOP 0.30·R, COIN_HOP 0.42·R }`:
+- a tap gets a 0.42 s throw with one extra full turn on top of the delta to the landed face;
+- an auto-roll gets a throw of 85% of the roll interval, at least 0.16 s, and gets the extra turn only when the throw is at least 0.34 s long, so at 5 rolls a second the die turns only as far as the landed face and visibly lands on every result;
+- the hop height scales with the throw length, so a short throw is a short hop.
 
-**Fast-roll mode (> 8 rolls/s).** The polygon never stops: continuous spin blur at a rate proportional to the real roll rate, with a **strobed snap** 8×/s that holds a legible number in the marker window for ~60 ms. It still reads as a spin at any speed. Floats throttled to 8/s; skipped payouts are merged and shown as one summed float. Constant per-frame cost.
+The die is in the air for the first `THROW_LAND = 0.82` of the tween, easing easeOutCubic, and lands flat exactly then; the rest of the tween is the squash on the ground (up to 14% vertical, half that as sideways stretch) with no rotation, because a die that has landed on a flat does not rock back. No overshoot. **The payout, the flash and the dust fire at touchdown, 82% of the tween, not at its end.** Whichever comes first, touchdown or the next throw, pays the previous throw. Motion blur is adaptive: up to 6 ghost copies are spread over the angle the die turned *this frame*, so a fast turn smears and a slow one stays crisp. Numerals fade with angular speed (fully visible under 6 rad/s, 10% above 20 rad/s) and come back as the throw slows. The marker triangle stays at the die's rest height while the die hops under it. The contact shadow shrinks and fades as the die leaves the ground.
 
-**Landed face.** Shown by **position** (it is under the marker) plus a 120 ms white edge flash. **Never by colour.** Colour means face *type* only:
+**The two-sided die is a coin** and flips over rather than spinning in its plane: the lens is drawn at rest and squashed vertically by the cosine of its turn, so it goes edge-on (minimum thickness 7%) and comes back the other way up. Its two numerals foreshorten and swap places, never mirrored, and fade out when edge-on; the back face takes more of the shade so the two sides read as two sides. It is tossed a little higher than a polygon (`COIN_HOP`).
+
+**The one-sided die cannot be flipped.** A tap kicks it and it rocks on its flat like a weeble: a damped oscillator, `ROCK = { K 90, C 3.0, KICK 5.6 rad/s, MAX_V 8, MAX_LEAN 0.8 rad }`, kicked alternately left and right with a little random variation, tipping onto its round side by about 25 to 33 degrees and falling back, gone in about two seconds. The lean is capped so a fast roller can never tip it over. The 1 rocks with the disc, and the payout fires at the same moment a throw's would. When the disc grows into the lens mid-rock, the morph starts from the disc as it leans and lands the lens upright. A one-sided die has nowhere else to land; that is the joke.
+
+**Sounds.** Polygons keep the roll blip; the coin gets a short bright flick; the disc a soft low knock.
+
+**Fast-roll mode (> 8 rolls/s).** The polygon never stops: continuous spin blur at a rate proportional to the real roll rate, with a **strobed snap** 8×/s that holds a legible number in the marker window for 80 ms and lands with a 3 px bob. Between strobes the numerals stay faint (30%) rather than vanishing, so the die is never a blank disc. The one-sided disc shivers (plus or minus 3 degrees) instead of spinning. It still reads as a spin at any speed. Floats throttled to 8/s; skipped payouts are merged and shown as one summed float. Constant per-frame cost.
+
+**Landed face.** Shown by **position** (it is under the marker) plus a 120 ms edge flash in the theme accent (A7). **Never by colour.** Colour means face *type* only:
 
 | type | fill | mark |
 |---|---|---|
 | normal | bone / theme fg | none |
-| ×2 (×3) | cool tint | small `×2` tag on the edge |
-| jackpot | gold | ★ |
+| ×2 (×3) | a band along the face's own edge in the skin's `x2` colour, `BAND_W = 0.13·R` deep, with a faint ink seam on its inner edge | small `×2` (`×3`) tag on the band, parallel to the edge, never upside down, drawn only where the edge is long enough to carry it |
+| jackpot | the same band in the skin's `jack` colour | ★ on the band; at 100 sides the band is a gold notch |
+
+Each die skin carries its own `x2` and `jack` colour per theme, chosen against that skin's face. The page-level `--tint` and `--gold` tokens are picked against the page background and are not used on faces. There is no wedge to the centre, no thick tick and no pip: the band marks a special face at every side count.
 
 **Payout floats are per-die**, anchored to that die's screen x, rising 70 px over 700 ms (relative to canvas height, never a flat pixel offset). White / cyan > 100 / gold > 10k. Jackpot floats are gold with ★ and trigger a screen-space coin sparkle.
 
@@ -173,13 +186,14 @@ attempt to fix it with constants.
 **Add-a-side morph (600 ms, the money shot).** 240 arc-length-parameterised points, point-for-point lerp, easeOutBack 1.7, gold sweep on the new edge, numeral stamps 1.6×→1.0, expanding ring, 6 px shake, **UI frozen 700 ms** (income keeps accruing).
 
 **Visual pass (no external assets, same canvas):**
-- **Extruded rim** — a 4–6 px offset copy of the polygon behind the face, darkened, giving depth.
-- **Soft lighting** — one linear gradient across the face plus a faint specular arc on the upper-left edges.
-- **Landing burst** — dust/spark particles at the contact point, count and radius scaled by `payout / E(die)`.
-- **Jackpot sparkle** — screen-space coin glints, 900 ms.
-- **Tumble easing** — easeOutQuart plus a 40 ms overshoot settle.
+- **Extruded rim.** A 4–6 px offset copy of the polygon behind the face, darkened, giving depth.
+- **Soft lighting.** One linear gradient across the face plus a faint specular arc on the upper-left edges.
+- **Landing burst.** Dust/spark particles at the contact point, fired at touchdown, count and radius scaled by `payout / E(die)`.
+- **Jackpot sparkle.** Screen-space coin glints, 900 ms.
+- **Motion blur.** Up to 6 ghosts spread over the angle the die turned this frame (see Roll); a growing die keeps them, because it keeps rolling.
+- **Throw easing.** easeOutCubic to touchdown at 82% of the tween, then the anchored squash on the ground. No rotational overshoot: the old easeOutQuart plus a 10-degree settle is gone.
 
-One canvas, one rAF, cancelled when nothing animates and on `visibilitychange`. No physics, ever. `ResizeObserver` on `#stageWrap` drives `sizeCanvas`; no minimum logical height.
+One canvas, one rAF, cancelled when nothing animates and on `visibilitychange`. No physics, ever (the disc's rock is one damped spring on one angle, not a physics engine). `ResizeObserver` on `#stageWrap` drives `sizeCanvas`; no minimum logical height.
 
 ---
 
@@ -599,6 +613,86 @@ unlock and scans ×2 profiles 1, 2 and 3 too (146,224 shapes).
 - The hoard proof now runs hoard levels 1.5×, 2× and 4× for both the cheapest and
   the return-on-investment buyer; every one ends no sooner and with no more
   shards than pressing RECAST when it lights.
+
+## A15. The dice themselves: bands, the throw, the coin and the disc (v2.2)
+
+*From the owner's feedback after playing v2.1 (`docs/FEEDBACK_LOG.md`,
+2026-09-24). Rendering and animation only, all in `<script id="game">`.
+**No economy number changed; `node check.js` and `node sim.js` pass
+unchanged.** Section 5 above is rewritten to match; this entry records what
+moved and why.*
+
+- **Bands, not wedges.** v2 tinted a doubled or jackpot face as a 55%-alpha
+  wedge from the centre to the edge, which read as a slice out of the die
+  ("the blue outline on the faces for x2 is too much"). Built: a band along
+  the face's own edge, `BAND_W = 0.13` of R deep, with a faint ink seam on its
+  inner edge. The band works at every side count (at 100 sides it is a
+  coloured notch), so A7's thick tick and pip past 13 sides are removed.
+- **Per-skin mark colours.** The wedge used the page-level `--tint` and
+  `--gold`, which were chosen against the page background and vanished on the
+  orange EMBER and mint JADE faces. Each die skin now carries its own `x2`
+  and `jack` colour for each theme, picked against that skin's face. Verified
+  by screenshot on all 18 combinations (3 die skins × 3 backgrounds × 2
+  themes).
+- **Tags anchored to the edge.** The `×2` tag hung off the numeral's text
+  frame, which was flipped face by face to keep the numeral upright, so the
+  tag sat toward the centre on some faces and toward the rim on others ("the
+  2x doesnt seem to always appear on the bottom of the face consistently for
+  all dice"). The tag and the ★ now sit on the band, parallel to the edge,
+  never upside down, and only where the edge is long enough to carry the tag.
+- **Upright numerals on the apothem.** Numerals are drawn upright on the
+  screen (`UPRIGHT_NUMERALS = true`, Claude's call, Nate can overturn) and
+  each sits on its own face's apothem inside the band: 0.62R was right for a
+  hexagon and outside a triangle altogether (its apothem is 0.5R).
+- **The roll is a throw.** v2 gave every roll two full turns in 380 ms with
+  easeOutQuart, which moved a hexagon 60 to 120 degrees a frame: on a 60 Hz
+  screen that is a flicker of random faces, not a spin, and under the roller
+  the die never rested ("not a fan of the auto flip animation"). Built: the
+  die hops off the ground line, turns in the air and lands flat with a squash
+  anchored at the contact point. `THROW = { TAP_S 0.42, MIN_S 0.16, TURN_S
+  0.34, HOP 0.30, COIN_HOP 0.42 }`: a tap gets 0.42 s and one extra turn; an
+  auto-roll gets 85% of its interval, at least 0.16 s, and the extra turn
+  only when it has 0.34 s, so at 5 rolls a second the die turns only to the
+  landed face and lands on every result. `THROW_LAND = 0.82`: in the air for
+  82% of the tween on easeOutCubic, then the squash with no rotation; the
+  10-degree rotational overshoot is gone, because a die that has landed on a
+  flat does not rock back. The payout, the flash and the dust fire at
+  touchdown, not at the tween's end.
+- **Adaptive blur and numeral fade.** Three ghosts at fixed 5-degree steps
+  covered a tenth of a fast frame's turn. Up to 6 ghosts are now spread over
+  the angle the die turned this frame. Numerals fade with angular speed
+  (fully visible under 6 rad/s, 10% above 20 rad/s) and return as the throw
+  slows. The marker keeps the die's rest height; the contact shadow shrinks
+  and fades with the hop.
+- **Fast mode.** The strobe hold is 80 ms, not 60; each strobe lands with a
+  3 px bob; between strobes the numerals stay at 30% instead of leaving a
+  blank disc.
+- **The two-sided die is a coin.** The lens spun in the plane like a
+  propeller, stood on its tip twice a turn, hopped up the ground line as it
+  did, and its number of turns varied with the result ("just seems
+  inconsistent"). Built: the lens is drawn at rest and squashed vertically by
+  the cosine of its turn (minimum thickness 7%), so it goes edge-on and comes
+  back the other way up; the numerals foreshorten, swap places, never mirror,
+  and fade when edge-on; the back face takes more of the shade; it is tossed
+  to 0.42R rather than 0.30R.
+- **The one-sided die cannot be flipped.** Section 2 says a tap "pivots it
+  onto its flat"; it now rocks on its flat like a weeble. `ROCK = { K 90,
+  C 3.0, KICK 5.6 rad/s, MAX_V 8, MAX_LEAN 0.8 rad }`: a damped oscillator,
+  kicked alternately left and right with a little random variation, leaning
+  about 25 to 33 degrees and settling in about two seconds; the cap keeps a
+  fast roller from ever tipping it over. The 1 rocks with the disc, the
+  payout fires at the same moment a throw's would, in fast mode the disc
+  shivers (plus or minus 3 degrees), and a disc that grows into the lens
+  mid-rock morphs from the disc as it leans to an upright lens. This is the
+  aesthetic joke Nate asked for: a one-sided die has nowhere else to land.
+  Section 5's "no physics" still stands: this is one spring on one angle,
+  not an engine.
+- **Sounds.** The coin gets a short bright flick, the disc a soft low knock;
+  polygons keep the roll blip.
+- **Measured how.** A Playwright harness at 375×812 captured every painted
+  frame over the DevTools protocol and tiled them into contact sheets, plus
+  the 18-combination skins matrix. Neither is shipped. The frames show what
+  is drawn; how it feels still needs Nate's phone.
 
 ## A8. Not built
 
