@@ -847,10 +847,19 @@ console.log('   shop\'s own rings point at; the optimiser buys by return at the 
 console.log('   taps/s. Both are honest players, so the content length is a RANGE.)');
 if (fastR && ref) {
   const lo = fastR.r.hit.endOfContent, hi = ref.hit.endOfContent;
-  const bandOk = lo > 60 && hi < 180;
-  if (!bandOk) invFails++;
-  console.log(`  ${bandOk ? 'PASS' : 'FAIL'}  content length ${lo.toFixed(0)}-${hi.toFixed(0)} min ` +
-    `(optimiser ${lo.toFixed(1)}, reference ${hi.toFixed(1)}); bound 60-180 min`);
+  if (lo === undefined || hi === undefined) {
+    /* either honest player ran out the horizon without finishing: that is a
+       FAIL, not a crash, and the line says which one never got there */
+    invFails++;
+    const show = (m) => (m === undefined ? '-' : m.toFixed(1));
+    console.log(`  FAIL  content length: not reached within ${HORIZON_MIN} min ` +
+      `(optimiser ${show(lo)}, reference ${show(hi)})`);
+  } else {
+    const bandOk = lo > 60 && hi < 180;
+    if (!bandOk) invFails++;
+    console.log(`  ${bandOk ? 'PASS' : 'FAIL'}  content length ${lo.toFixed(0)}-${hi.toFixed(0)} min ` +
+      `(optimiser ${lo.toFixed(1)}, reference ${hi.toFixed(1)}); bound 60-180 min`);
+  }
 }
 if (fastR && hoardR) {
   const a = fastR.r, b = hoardR.r;

@@ -34,6 +34,7 @@ Newest first. "Nate" means Nate decided; "Claude" means Claude made a routine ca
 
 | Date | Decision | Why | By |
 |---|---|---|---|
+| 2026-09-24 | `sim.js` reports an unreached end of content as a FAIL instead of crashing | With a setting that stalls the game (for example `--set SIDE_GROWTH=1.20`) the content-length check read a number that was never set and threw a TypeError before the GATE and INVARIANTS lines; it now prints `content length: not reached within 600 min (optimiser -, reference -)`, counts it as a failed invariant and finishes the report. No economy number changed | Claude |
 | 2026-09-17 | One self-contained `index.html`, no external files or network | Same as Nate's other prototypes: plays from GitHub Pages on a phone, wraps cleanly for Android | Claude |
 | 2026-09-17 | All numbers live in one `<script id="economy">` block with no screen code; the game reads only from it | The simulator and the game can never disagree about money | Claude |
 | 2026-09-17 | `sim.js` gates pacing: every milestone within plus or minus 35% of target, plus hard rules (no purchase lowers income, no dead zone over 4 minutes, no overflow) | Balance bugs a non-programmer can't see get caught automatically | Claude |
