@@ -8,7 +8,7 @@ Nate, 2026-09-24, verbatim: "im also a bit concerned about the pacing of the gam
 
 1. The opening is right. First purchase at 8 s, a six-sided die at 27 s, a new side every 4 to 6 s for the first 80 s, first x2 at 1:24. The v1 "5 to 6 sides is a grind" complaint is gone: there is something affordable every 4 to 18 s all the way to the auto-roller.
 2. The auto-roller lands at 4.7 min for a player who always buys the cheapest thing (the sim's gate bot), 1.8 min for one who saves for it, 1.0 min for a fast tapper. 4.7 is the top of the acceptable window, and SPEC section 2's own script says about 2:00, so the spec disagrees with its own milestone table.
-3. The second die is fine by the clock: 12.2 min (cheapest buyer), 5.9 (saver), 4.1 (fast tapper), 17.3 (idle). The problem is what follows it: the next new thing is the first Recast, 16 to 24 minutes later, the RECAST card stays hidden until about minute 26 for the cheapest buyer, and the third die (60,000) is hidden behind cheaper cards for the whole first run.
+3. The second die is fine by the clock: 12.2 min (cheapest buyer), 5.9 (saver), 4.1 (fast tapper), 17.3 (idle). The problem is what follows it: the next new thing is the first Recast, 16 to 24 minutes later, the RECAST card stays hidden until minute 27 for the cheapest buyer, and the third die (60,000) sits behind cheaper cards for all but the last two minutes of the first run.
 4. The first jackpot is a weak moment. At tier 1 it pays exactly 2x the doubled top face the player already sees every few seconds, and for the cheapest buyer it lands on a 48-side dial where the gold face is a 7.5 degree sliver. It becomes a real jackpot at tier 3 (29x an average face): minute 29 for the cheapest buyer, minute 10 for a fast tapper.
 5. The first x2 lands on a 17-side die for the cheapest buyer, past the 13-side point where the die stops showing every number. Only faster or saving players see their first x2 on a numbered die.
 6. Sameness, not dead zones, is the mid-game problem. Minutes 5 to 10 are twelve near-identical + SIDE buys on a 33 to 48 side die; minutes 15 to 36 are about forty + SIDE buys on 40+ side dials with one x2, jackpot tier or roller level per minute or less. The sim reports no dead zone because a side is always affordable.
@@ -122,15 +122,59 @@ The design panel judges said the same things in advance: first purchase under 12
 
 The 12-side version is a jackpot: 8x the average face, 4x the top face, 40% of the die, a face you can see. Nobody reaches it except the jack-first beeline (5.1 min), because 4,000 coins is 2 to 4 min of income at 12 sides and the cheapest buyer never saves. Tier 2 (16x) is 4x the top x2 face; tier 3 (29x) is 7x and is where it starts to feel like one: minute 29 (reference), 12.6 (optimiser), 9.7 (active). The wedge width is already an open question in ROADMAP; the payout ratio is the other half.
 
-**4.6 Does session 1 end on a hook?** For the cheapest buyer at 10 to 15 min the shop shows + SIDE (about 5,000), x2 (5,760), jackpot tier 2 (11,200) or roller L3 (11,800). The shop keeps only the two cheapest middle cards (index.html `refreshShop`), so + DIE #3 at 60,000 is never on screen in run 1 on that path (it needs both of the two cheapest middle cards above 60,000, which first happens after the Recast). The RECAST card appears at half its threshold (index.html `cardState`, `threshold * 0.5`), which is about minute 26. The skins chip appears at about minute 8 but 25,000 is 80 s of income and the bot never has 100,000 spare. Offline earnings are zero before the roller (`autoRate(-1)` = 0), so a player who leaves before 4.7 min gets no return card; the casual policy shows what that looks like at the extreme: roller on the fifth visit. The fast tapper ends a 15 min session mid-way through a 238 s save for roller L6, with RECAST at 55%.
+**4.6 Does session 1 end on a hook?** For the cheapest buyer at 10 to 15 min the shop shows + SIDE (about 5,000), x2 (5,760), jackpot tier 2 (11,200) or roller L3 (11,800). The shop keeps only the two cheapest middle cards (index.html `refreshShop`), and the RECAST card appears at half its threshold (index.html `cardState`, `threshold * 0.5`). Replaying both rules along the timelines:
+
+| Path | + DIE #3 card first on screen | On screen before the first Recast | RECAST card first shown | First Recast |
+|---|---|---|---|---|
+| reference | 34:33 | 128 s | 26:44 | 36:41 |
+| optimiser | 22:30 | 136 s | 19:07 | 25:51 |
+| active | 13:43 | 383 s | 15:20 | 21:05 |
+| idle | 47:57 | 160 s | 37:48 | 50:37 | The skins chip appears at about minute 8 but 25,000 is 80 s of income and the bot never has 100,000 spare. Offline earnings are zero before the roller (`autoRate(-1)` = 0), so a player who leaves before 4.7 min gets no return card; the casual policy shows what that looks like at the extreme: roller on the fifth visit. The fast tapper ends a 15 min session mid-way through a 238 s save for roller L6, with RECAST at 55%.
 
 ## 5. Measured candidate changes
 
-(pending: filled in from `node sim.js --set ...` runs)
+Each row is one `node sim.js --set` run on the shipped block, nothing saved. Reference-bot minutes; "range" is optimiser to reference end of content; gate is the 11-milestone check plus the six invariants.
+
+| Change | Roller | 1st jackpot | 2nd die | 1st Recast | End | Range | Gate | Note |
+|---|---|---|---|---|---|---|---|---|
+| shipped | 4.73 | 10.41 | 12.19 | 36.68 | 130.5 | 86-130 | PASS | |
+| ROLLER_BASE 600 to 400 | 3.85 | 9.79 | 11.01 | 33.78 | 116.1 | 78-116 | PASS | active 0.87, optimiser 1.44, idle 3.85 |
+| ROLLER_BASE 600 to 300 | 2.99 | 8.86 | 10.09 | 31.26 | 107.0 | 74-107 | PASS | roller lands on a 27-side die; + SIDE dominated 2.9% of playtime; idle: die 14.3, end 127 |
+| ROLLER_BASE 600 to 200 | 2.46 | 8.52 | 9.51 | 28.33 | 97.3 | 68-97 | FAIL | roller 0.62x of its target |
+| X2_BASE 90 to 45 | 4.41 | 9.98 | 11.72 | 35.66 | 126.2 | 83-126 | PASS | first x2 at 0:56 on a 12-side die; active 0.42, optimiser 0.75 |
+| X2_UNLOCK_SIDES 9 to 12 | 4.73 | 10.41 | 12.19 | 36.68 | 130.5 | 86-130 | PASS | reference unchanged (it buys at 17 anyway); optimiser 1.88 |
+| JACK_BASE 4000 to 2500 | 4.73 | 8.60 | 11.82 | 35.47 | 123.8 | 81-124 | PASS | active 2.18, optimiser 3.79; A1 rejected this because the beeline hit 4.06 |
+| JACK_MULT_BASE 8 to 12, JACK_MULT_GROWTH 1.9 to 1.75 | 4.73 | 10.41 | 12.09 | 35.39 | 126.9 | 82-127 | PASS | multiples 12 21 37 65 113 197; gates 12 12 13 22 38 66; worst jackpot share 74.2% at n=13 tier 3 |
+| JACK_GROWTH 2.8 to 2.4 | 4.73 | 10.41 | 12.19 | 36.27 | 124.4 | 82-124 | PASS | tiers cost 4000, 9600, 23K, 55K, 133K, 319K; a tier about every 5 min mid-game instead of about 8 |
+| UNLOCK_UNIT_SIDES 10 to 20 | 4.73 | 10.41 | 12.19 | 36.68 | 130.5 | 86-130 | PASS | no change except rush-die: die 5.94 |
+| UNLOCK_UNIT_ROLLER 2 to 3 | 4.73 | 10.41 | 19.51 | 38.58 | 132.4 | 86-132 | FAIL | second die 1.39x; idle 28.0 |
+| UNIT_BASE 5000 to 8000 | 4.73 | 10.41 | 15.03 | 37.99 | 131.7 | 86-132 | PASS | idle 21.4, active 4.63, optimiser 6.57 |
+| UNIT_GROWTH 12 to 6 (third die 30,000) | 4.73 | 10.41 | 12.19 | 37.25 | 130.0 | 85-130 | PASS | third die at 29:27 in run 1 (shipped: 46:18 in run 2); its card on screen from 21:47, 460 s in run 1 |
+| SIDE_BASE 13 to 20 | 5.25 | 11.67 | 13.59 | 38.97 | 147.8 | 101-148 | FAIL | x2 1.41x, 20 sides 1.77x, 100 sides 1.37x |
+| SIDE_GROWTH 1.13 to 1.16 | 4.53 | 10.48 | 12.55 | 39.14 | 353.6 | 310-354 | FAIL | 4 milestones, 9 invariants, 17 dead zones, longest 24.9 min; confirms A1 |
+| SIDE_GROWTH 1.13 to 1.20 | | | | | | | crash | `sim.js` line 852 throws when end of content is never reached (reporting bug, queued separately) |
 
 ## 6. Recommendations
 
-(pending)
+Not applied. Each names the constant, the measured effect, the sim rule most at risk, and a confidence.
+
+**Change now, low risk**
+
+1. **Show the RECAST card earlier.** `cardState` in index.html: `s.show = st.runCoins >= threshold * 0.5` to `0.15`. A presentation threshold, not in the economy block; no milestone or invariant moves. At 15% of 840,000 (126,000 run coins) the card appears at about minute 15 (reference), 10 (optimiser), 8 (active) instead of 27, 19, 15, so the first session ends looking at its long goal with the ring already filling. Risk: none in the sim; `check.js` asserts the card's strings, not its timing. Confidence high.
+2. **X2_BASE 90 to 45.** First x2 at 0:56 on a 12-side die with every face numbered, instead of 1:24 on a 17-side die in tick mode; the spec's own script wanted it at 9 sides. Roller 4.41, jackpot 9.98, die 11.72, Recast 35.66, end 126.2. Gate and all invariants PASS; the x2 ladder still wants the roller past its third step (180 against 600). Record in SPEC A1. Confidence high.
+3. **Make SPEC section 2 and the milestone table agree on the roller.** The script says ROLLER at 1:10 to 2:00, the table says 4 min, the gate bot lands at 4.73. Either the table target moves to 4.5 with the script rewritten for the cheapest buyer, or recommendation 4 is taken and the target moves to 3. Documentation only. Confidence high.
+4. **Add three prints to `sim.js`, measured, not gated:** minutes between new kinds of purchase per policy; longest run of consecutive + SIDE buys once die 1 is past 40 sides; zero-purchase minutes for the return-on-investment buyers. The dead-zone bound saw none of the problems in sections 2 and 4. Confidence high.
+
+**Needs a real playtest first**
+
+5. **ROLLER_BASE 600 to 300 or 400.** At 300 the cheapest buyer has the roller at 2:59 on a 27-side die (about 300 taps instead of 480), jackpot 8.86, die 10.09, Recast 31.26, end 107.0; at 400: 3.85, 9.79, 11.01, 33.78, 116.1. Both PASS; 200 fails the gate. Cost: content shortens by 14 to 23 minutes with no new content to replace it, and idle-only players lose the most. Playtest because 4.7 minutes of tapping is a feel question, and engaged players are already at 1 to 2 min. Confidence medium; 400 is the safer step.
+6. **Make jackpot tier 1 a jackpot.** Two constant-level options, both PASS with the milestone table within 0.4 min: (a) JACK_MULT_BASE 8 to 12 with JACK_MULT_GROWTH 1.9 to 1.75 makes tier 1 pay 3x the top doubled face and about 10x an average face instead of 2x and 6.5x, and keeps tier 6 at 197; its worst jackpot share is 74.2%, 0.8 points under invariant 5's cap, so any further push needs the gate solver checked. (b) JACK_GROWTH 2.8 to 2.4 gives a new gold tier about every 5 minutes mid-game instead of 8, the most visible event in the dial zone. Do not take JACK_BASE 2500: A1's reason still stands. Playtest first because on a 40+ side dial the gold face is a 7 degree sliver (open in ROADMAP) and no constant fixes that. Confidence medium.
+7. **UNIT_GROWTH 12 to 6 (third die 30,000 instead of 60,000).** The third die arrives at 29:27 in run 1 for the cheapest buyer instead of 46:18 in run 2, and its card is on screen for 460 s of run 1 instead of 128, which fills the 12-to-36 minute gap with a real event and a visible goal. Recast 37.25, end 130.0, all PASS. Risk: die 3's sides cost 16x, the A10 and A13 stall cases were about a small third die, and the invariant-1 scan is shape-based so it still passes; the playtest question is Nate's F11, whether three dice this early crowd a phone screen. Confidence medium.
+8. **Leave the second die alone.** Delaying it does not help: UNLOCK_UNIT_ROLLER 3 fails the gate (19.5 min), UNIT_BASE 8000 pushes the idler to 21 min, UNLOCK_UNIT_SIDES 20 changes nothing. Bringing it earlier would land it on top of the jackpot and roller L2, which already arrive inside three minutes of it. What is worth a playtest is the 6-second growth burst of a newborn die, and whether a hold that takes it 1 to 20 in 2 seconds reads as a replay of the opening or as a blur. Confidence high on the constants, low on the feel.
+9. **Something on return for a player who leaves before the roller.** Offline pay is `OFFLINE_RATE x autoRate(roller)` and `autoRate(-1)` is 0, so a first session that ends at minute 3 pays nothing on return; the casual policy buys the roller on its fifth visit at 40.7 min. Recommendation 5 shrinks the window; a pre-roller trickle would be new content and SPEC section 10 rules out new sinks and rewards, so this is Nate's call after seeing how real first sessions end. Confidence medium.
+10. **Do not touch SIDE_BASE or SIDE_GROWTH.** 20 fails three milestones, 1.16 fails four milestones and nine invariants (17 dead zones), which repeats A1's measurement. The opening cadence is the best part of the curve. Confidence high.
+
+Sameness in the dial zone (section 4.3) has no constant-level fix. Recommendation 6b is the one lever that puts a visible event into it; the rest is presentation (what a side purchase looks like at 60 sides) and the ROADMAP's face-editing second act.
 
 ## 7. Method
 
