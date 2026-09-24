@@ -1,5 +1,7 @@
 # ONE MORE SIDE: instructions for AI sessions
 
+> **STOP FIRST, especially in a cloud session.** This public repo holds only the frozen 2D prototype (`index.html`). The real game (3D dice, the Android app Nate plays) is **not in this repo**; it lives in Nate's private game repo, and all production work, feedback and docs happen there. If you were started here to work on the game, do not change anything: tell Nate "this session is on the public prototype repo; start the cloud session on the private game repo instead" and stop. Change this repo only when Nate explicitly asks for the prototype itself.
+
 Dice idle game prototype. Owner: Nate (they/them), very little programming experience, builds through AI sessions. Android first.
 
 ## Before working
