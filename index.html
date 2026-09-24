@@ -2343,11 +2343,12 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
     ctx.save();
     ctx.font = '700 ' + tagFs.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
     var tagW = ctx.measureText('×' + die.tier).width;
-    ctx.globalAlpha = opts.labelAlpha;
+    var starW = tagFs * 1.05;
     for (i = 0; i < sides; i++) {
       type = E.faceType(die, i);
       if (type === 'normal') continue;
-      if (type === 'x2' && edgeLen * apo < tagW + tagFs * 0.9) continue;
+      if (edgeLen * apo < (type === 'jack' ? starW : tagW) + tagFs * 0.9) continue;
+      ctx.globalAlpha = (opts.quiet && i === opts.landed) ? 1 : opts.labelAlpha;
       ang = edgeAngle(sides, i, rot);
       rotText = ang - Math.PI / 2;
       if (Math.cos(rotText) < 0) rotText += Math.PI;      // never upside down
@@ -2366,7 +2367,7 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
     ctx.restore();
   }
 
-  if (faces.length) {
+  if (faces.length && (opts.labelAlpha > 0.05 || opts.quiet)) {
     var fs = Math.max(9, Math.min(sides === 2 ? 24 : 32,
       (mode2 === 'full' ? edgeLen * 0.42 : R * 0.16)));
     /* The numeral sits on its face's own apothem, inside the band: 0.62R was
@@ -2412,7 +2413,7 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
        + SIDE money shot happens in the window instead: it pops showing the new
        highest face at 1.6x and settles to 1.0, which is the whole point of the
        purchase said without a word. */
-    var landed = opts.landed;
+    var landed = opts.windowFace !== undefined ? opts.windowFace : opts.landed;
     if (opts.morphPts && opts.stampFace >= 0 && opts.stampFace < sides) landed = opts.stampFace;
     var type2 = E.faceType(die, landed);
     var label = THEME.faceLabel(landed);
@@ -2502,17 +2503,24 @@ var THROW = {
    even be able to be flipped, as kinda a joke about a 1 sided dice") */
 var ROCK = {
   K: 90,              // spring: 9.5 rad/s, a 0.66 s rock
-  C: 3.0,             // damping: the rock is gone in about two seconds
+  C: 3.4,             // damping: the rock is gone in about two seconds
   KICK: 5.6,          // rad/s per tap, a lean of about 33 degrees
-  MAX_V: 8,
-  MAX_LEAN: 0.8
+  MAX_V: 7,
+  MAX_LEAN: 0.7,
+  MAX_AMP: 0.62        // rad: the swing a kick can no longer add to
 };
 
 function rockDie(an) {
   an.rockSign = -(an.rockSign || 1);
-  var kick = ROCK.KICK * (0.85 + 0.3 * Math.random()) * an.rockSign;
-  /* a kick against the swing cancels it, one with it adds; the cap keeps
-     the disc on the ground either way */
+  /* a short auto-throw is a small nudge, the same way it is a small hop, so
+     a fast roller keeps the disc at a rock rather than a thrash */
+  var kick = ROCK.KICK * (0.85 + 0.3 * Math.random()) * an.rockSign *
+             Math.min(1, an.dur / THROW.TAP_S);
+  /* the swing has a ceiling: a kick into a disc already rocking near it
+     adds little, so neither a roller near the spring's own beat nor a
+     thumb at ten taps a second can wind it up past a rock */
+  var amp = Math.hypot(an.rot || 0, (an.rockV || 0) / Math.sqrt(ROCK.K));
+  kick *= Math.max(0, 1 - amp / ROCK.MAX_AMP);
   an.rockV = Math.max(-ROCK.MAX_V, Math.min(ROCK.MAX_V, (an.rockV || 0) + kick));
   an.mode = 'rock';
   an.from = an.to = an.rot;
@@ -2894,18 +2902,26 @@ function rebaseForGrowth(unitIndex, newSides, cur, hadMorph) {
   var an = unitAnim(unitIndex), oldSides = newSides - 1;
   if (an.mode === 'rock') {
     /* the disc becomes a lens: the morph starts from the disc exactly as it
-       leans this frame and lands the lens upright, and the spring lets go */
+       leans this frame and lands the lens upright, and the spring lets go.
+       The tween's clock (t, paid) is left alone: the tap that kicked the disc
+       is still owed its payout, and the THROW_LAND crossing pays it. */
     var lean = an.rot;
-    an.mode = ''; an.rockV = 0; an.rot = 0; an.t = 1; an.paid = true;
+    an.mode = ''; an.rockV = 0; an.rot = 0;
     return rotatePts(cur, lean);
   }
   if (G.fastMode) {                       // spin phase drives rot; nothing to steer
     if (an.snap > 0) an.snapRot = rotationFor(newSides, an.index);
     return cur;
   }
-  if (an.t < 1) {                         // mid-roll: land flat on the NEW shape
+  if (an.t < 1 && an.mode === 'throw') {  // mid-throw: land flat on the NEW shape
+    /* In the air, steering keeps this frame's rotation exactly. On the
+       ground (the landed tail, rollEase = 1) the rotation has to move by the
+       whole shift, so the outline is carried round by the same angle and the
+       picture drawn this frame still does not change. */
+    var wasRot = an.rot;
     steerRoll(an, rotationFor(newSides, an.index) - rotationFor(oldSides, an.index));
-    return cur;
+    an.rot = an.from + (an.to - an.from) * rollEase(an.t);
+    return rotatePts(cur, wasRot - an.rot);
   }
   if (!hadMorph) {
     /* At rest on a settled polygon: keep the landed face under the marker (the
@@ -3732,6 +3748,7 @@ function onTap(ev) {
      fast tapper gets shorter ones that land before the next tap, the same
      rule the roller follows */
   var gap = Math.min(THROW.TAP_S / 0.85, Math.max(0.2, wall - G.tapGuard));
+  if (st.roller >= 0) gap = Math.min(gap, 1 / E.throwRate(st, 0));
   G.tapGuard = wall;
   doRoll(!G.fastMode, gap);
   markDirty();
@@ -3864,7 +3881,7 @@ function update(dt) {
       a.rot += a.rockV * dt;
       if (a.rot > ROCK.MAX_LEAN) { a.rot = ROCK.MAX_LEAN; a.rockV = Math.min(0, a.rockV); }
       if (a.rot < -ROCK.MAX_LEAN) { a.rot = -ROCK.MAX_LEAN; a.rockV = Math.max(0, a.rockV); }
-      if (Math.abs(a.rot) < 0.003 && Math.abs(a.rockV) < 0.03) { a.rot = 0; a.rockV = 0; a.mode = ''; }
+      if (Math.abs(a.rot) < 0.008 && Math.abs(a.rockV) < 0.08) { a.rot = 0; a.rockV = 0; a.mode = ''; }
     }
     if (a.t < 1) {
       a.t = Math.min(1, a.t + dt / a.dur);
@@ -4031,7 +4048,8 @@ function draw() {
     }
 
     var depth = sides === 2 && !G.morphs[i]
-              ? R * 0.45 * Math.max(0.07, Math.abs(Math.cos(rot)))
+              ? (G.fastMode && an.snap <= 0 ? R * 0.45           // spins about its rest centre
+                                             : R * 0.45 * Math.max(0.07, Math.abs(Math.cos(rot))))
               : bottomOf(sides, R, rot);
     var morphPts = null;
     var mo = G.morphs[i] || null;
@@ -4061,10 +4079,10 @@ function draw() {
     if (an.mode === 'throw' && an.t < 1) {
       hopY = hopNow(an) * R;
       if (an.t > THROW_LAND) {
-        var q = Math.sin(Math.PI * (an.t - THROW_LAND) / (1 - THROW_LAND));
+        var sq = Math.sin(Math.PI * (an.t - THROW_LAND) / (1 - THROW_LAND));
         var amt = 0.06 + 0.08 * Math.min(1, an.hop / THROW.HOP);
-        squashY = 1 - amt * q;
-        squash = 1 + amt * 0.5 * q;
+        squashY = 1 - amt * sq;
+        squash = 1 + amt * 0.5 * sq;
       }
     }
     var y = gy - depth - hopY - bob;
@@ -4084,10 +4102,11 @@ function draw() {
     var opts = {
       die: die, sides: sides, R: R, rot: rot, x: x, y: y,
       sx: squash, sy: squashY,
+      landed: an.index,
       /* while a throw is in the air the value window reads whatever face is
          under the marker right now, so a 100-side die counts into its result
          instead of announcing it before it has landed */
-      landed: (an.mode === 'throw' && an.t < THROW_LAND && !G.fastMode) ? faceUnder(sides, rot) : an.index,
+      windowFace: (an.mode === 'throw' && an.t < THROW_LAND && !G.fastMode) ? faceUnder(sides, rot) : an.index,
       flash: an.flash, glow: an.glow,
       pulse: !!sideTgt && sideTgt.unit === i && !anyMorph(),
       time: G.now,

@@ -4,6 +4,16 @@ Every piece of Nate's feedback on this game, verbatim, newest first. Each entry 
 
 ---
 
+## 2026-09-24: the rate readout
+
+> "another thing i just thought of, the per min, per sec, adjusts too quickly, it should be normalized or update a bit slower"
+
+| # | Point | Decision | Status |
+|---|---|---|---|
+| R1 | A per-minute / per-second figure adjusts too quickly; normalise it or update it more slowly | Not changed yet, because this build prints no coins-per-second or per-minute figure anywhere. The things on screen that move at that cadence are the coin counter (it eases to the real balance in about 120 ms, so under a roller it moves with every landing), the Hot Hand countdown (whole seconds), and the ROLLER card's "ROLLS/SEC" (changes only when a level is bought). Nate to say which one they mean, or whether it is another prototype. If it is the coin counter, the fix is a slower ease (about 0.4 s) or a ramp capped at a few steps a second | **open**: waiting for Nate to point at the readout |
+
+---
+
 ## 2026-09-24: keep going, and the skipped sections
 
 > "i have to step away for awhile, so keep going and make sure everything is tested and refined, also work on the skipped sections too"
