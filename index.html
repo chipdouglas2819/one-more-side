@@ -1187,16 +1187,22 @@ var DEV = /(\?|&)dev=1(&|$)/.test(location.search);
    Two categories of three, each drawn live from these numbers. No assets, no
    image files, nothing to download. Every skin carries a light and a dark set
    so both themes stay designed rather than filtered. */
+/* `x2` and `jack` are the face-type colours ON THIS SKIN: the same cool and
+   gold families the floats and dust use, but each shade is picked against the
+   skin's own face so the band reads on every skin in both themes. The theme
+   tokens --tint and --gold are chosen against the page, not against an orange
+   or a mint die, and painting them straight onto the face was what made the
+   marks vanish on EMBER and JADE. */
 var DIE_SKINS = [
   { id: 'bone', name: 'BONE',
-    dark:  { face: '#ece7dc', face2: '#c6c0b0', rim: '#7f7a6e', ink: '#23262b' },
-    light: { face: '#ffffff', face2: '#e0d9c8', rim: '#b0a894', ink: '#23262b' } },
+    dark:  { face: '#ece7dc', face2: '#c6c0b0', rim: '#7f7a6e', ink: '#23262b', x2: '#2a9db0', jack: '#e8a820' },
+    light: { face: '#ffffff', face2: '#e0d9c8', rim: '#b0a894', ink: '#23262b', x2: '#1f8a99', jack: '#dfa018' } },
   { id: 'ember', name: 'EMBER',
-    dark:  { face: '#f5ab62', face2: '#c1521d', rim: '#6f3311', ink: '#2c1206' },
-    light: { face: '#ffc184', face2: '#dd6f2a', rim: '#94481a', ink: '#33160a' } },
+    dark:  { face: '#f5ab62', face2: '#c1521d', rim: '#6f3311', ink: '#2c1206', x2: '#1a6c7a', jack: '#ffe38f' },
+    light: { face: '#ffc184', face2: '#dd6f2a', rim: '#94481a', ink: '#33160a', x2: '#1a6c7a', jack: '#fff0b0' } },
   { id: 'jade', name: 'JADE',
-    dark:  { face: '#8bdcb9', face2: '#2f8c72', rim: '#175042', ink: '#0d2a22' },
-    light: { face: '#a9ebca', face2: '#41a284', rim: '#256a57', ink: '#0d2a22' } }
+    dark:  { face: '#8bdcb9', face2: '#2f8c72', rim: '#175042', ink: '#0d2a22', x2: '#13606f', jack: '#f4c437' },
+    light: { face: '#a9ebca', face2: '#41a284', rim: '#256a57', ink: '#0d2a22', x2: '#13606f', jack: '#f0bd2c' } }
 ];
 
 var BG_SKINS = [
@@ -1329,8 +1335,10 @@ function resetVisualState() {
 
 function unitAnim(i) {
   while (G.anims.length <= i) {
-    G.anims.push({ rot: 0, from: 0, to: 0, t: 1, dur: 0.38, index: 0, flash: 0,
-                   snap: 0, snapRot: 0, snapIndex: 0, glow: 0 });
+    G.anims.push({ rot: 0, from: 0, to: 0, t: 1, dur: 0.42, index: 0, flash: 0,
+                   snap: 0, snapRot: 0, snapIndex: 0, glow: 0,
+                   mode: '', hop: 0, hopFrom: 0, paid: true, sweep: 0, omega: 0,
+                   rockV: 0, rockSign: 1 });
   }
   return G.anims[i];
 }
@@ -1609,6 +1617,9 @@ var Audio2 = (function () {
     unlock: function () { var c = ensure(); if (c && c.state === 'suspended') c.resume(); },
     play: function (name, value) {
       if (name === 'roll') blip('triangle', 210, 0.05, 0.05);
+      /* the coin: a short bright flick; the disc: a soft wooden knock */
+      else if (name === 'flip') blip('sine', 740, 0.06, 0.04, 1180);
+      else if (name === 'rock') blip('sine', 150, 0.08, 0.06, 95);
       else if (name === 'land') {
         var f = 330 + Math.min(520, Math.log10(Math.max(1, value || 1)) * 130);
         blip('square', f, 0.07, 0.045);
@@ -1790,6 +1801,13 @@ function rotationFor(sides, index) {
   return -index * (2 * Math.PI / sides);
 }
 
+/* The face under the marker at rotation `rot`: the inverse of rotationFor. */
+function faceUnder(sides, rot) {
+  if (sides <= 1) return 0;
+  var q = Math.round(-rot / (2 * Math.PI / sides)) % sides;
+  return (q + sides) % sides;
+}
+
 /* Small ring memo. Inside a single drawDie the same (sides, R, rot) is asked for
    by the rim, the fill, the face-type clip, the stroke, the specular clip, the
    pulse, the glow AND once per non-normal face - about twenty rebuilds of a
@@ -1930,12 +1948,16 @@ function easeOutBack(t) { var c = 1.70158; return 1 + (c + 1) * Math.pow(t - 1, 
 /* No overshoot: a chained morph is one step of a longer swell, and an
    overshoot on every step at 15 a second reads as a wobble, not growth. */
 function easeOutCubic(t) { return 1 - Math.pow(1 - t, 3); }
-/* The roll settle: easeOutQuart plus a short overshoot at the very end. One
+/* The turn of a throw. The die is in the air for the first THROW_LAND of the
+   tween and lands flat exactly then; the rest of the tween is the squash on
+   the ground, with no rotation, because a die that has landed on a flat does
+   not rock back. easeOutCubic rather than Quart: Quart spends 70% of the turn
+   in the first fifth of the time, which is where the flicker came from. One
    function, because steering a roll mid-flight has to invert exactly this. */
+var THROW_LAND = 0.82;
 function rollEase(t) {
-  var e = easeOutQuart(t);
-  if (t > 0.9) e += Math.sin((t - 0.9) / 0.1 * Math.PI) * 0.012;
-  return e;
+  var u = Math.min(1, t / THROW_LAND);
+  return 1 - Math.pow(1 - u, 3);
 }
 
 /* ---- canvas --------------------------------------------------------------- */
@@ -2080,21 +2102,37 @@ function labelledFaces(sides, rot) {
 
 /* ---- the die -------------------------------------------------------------- */
 
-/* `v` is the caller's vertex array, hoisted out of the loop: a 100-side die with
-   twelve doubled faces and a jackpot used to rebuild it thirteen times. */
-function faceFill(ctx, die, i, skin, v) {
+/* A doubled or jackpot face wears a band along its OWN edge, not a wedge cut
+   to the centre. Colour still means face type and nothing else, but a band
+   reads as a coloured edge on a die where the wedge read as a slice out of it
+   (Nate, 2026-09-24: "the blue outline on the faces for x2 is too much").
+   BAND_W is the band's depth as a fraction of R. `v` is the caller's vertex
+   array, hoisted out of the loop: a 100-side die with twelve doubled faces and
+   a jackpot used to rebuild it thirteen times. */
+var BAND_W = 0.13;
+function faceBand(ctx, die, i, sk, v) {
   var type = E.faceType(die, i);
   if (type === 'normal') return;
   var sides = v.length;
   var a = v[(i - 1 + sides) % sides], b = v[i % sides];
+  var k = 1 - BAND_W;
   ctx.beginPath();
-  ctx.moveTo(0, 0);
-  ctx.lineTo(a[0], a[1]);
+  ctx.moveTo(a[0], a[1]);
   ctx.lineTo(b[0], b[1]);
+  ctx.lineTo(b[0] * k, b[1] * k);
+  ctx.lineTo(a[0] * k, a[1] * k);
   ctx.closePath();
-  ctx.globalAlpha = type === 'jack' ? 0.9 : 0.55;
-  ctx.fillStyle = type === 'jack' ? THEME.palette.gold : THEME.palette.tint;
+  ctx.fillStyle = type === 'jack' ? sk.jack : sk.x2;
   ctx.fill();
+  /* an ink seam on the inner edge, so the band has a crisp inside line on a
+     skin whose face is close to its colour */
+  ctx.beginPath();
+  ctx.moveTo(b[0] * k, b[1] * k);
+  ctx.lineTo(a[0] * k, a[1] * k);
+  ctx.lineWidth = 1;
+  ctx.globalAlpha = 0.28;
+  ctx.strokeStyle = sk.ink;
+  ctx.stroke();
   ctx.globalAlpha = 1;
 }
 
@@ -2109,14 +2147,31 @@ function drawDie(ctx, unitIndex, opts) {
 
   ctx.save();
   ctx.translate(opts.x, opts.y);
+  /* the landing squash is anchored at the contact point, so the die squashes
+     onto the ground line instead of lifting off it */
+  var anchor = opts.anchor || 0;
+  ctx.translate(0, anchor);
   ctx.scale(opts.sx, opts.sy);
+  ctx.translate(0, -anchor);
   /* Motion ghosts are the same silhouette a few degrees round, and a rotated
      copy of a path is a TRANSFORM, not a new path. Passing the offset as `spin`
      instead of baking it into rot keeps every pass in the frame on one
      (sides, R, rot) key, so the point table and the Path2D are built once per
      die instead of once per ghost - at 100 sides and three dice that is 3
      builds a frame instead of 12, and the builds are 100 hypot pairs each. */
-  if (opts.spin) ctx.rotate(opts.spin);
+  var flip = null;
+  if (sides === 2 && !opts.morphPts) {
+    /* The two-sided die is a coin, and a coin flips over: the lens is drawn
+       at rest and squashed vertically by the cosine of its turn, so it goes
+       edge-on and comes back the other way up. Its in-plane spin (v2) stood
+       the lens on its tip twice a turn and hopped it up the ground line
+       (Nate, 2026-09-24: "not a fan of how the 2 sided one flips, just seems
+       inconsistent"). A minimum thickness keeps the edge on screen. */
+    var c = Math.cos(rot + (opts.spin || 0));
+    flip = (c < 0 ? -1 : 1) * Math.max(0.07, Math.abs(c));
+    ctx.scale(1, flip);
+    rot = 0;
+  } else if (opts.spin) ctx.rotate(opts.spin);
 
   /* path() hands back a reusable Path2D when it can and otherwise installs the
      path into the context and returns null; fillP/strokeP/clipP take whichever
@@ -2150,10 +2205,12 @@ function drawDie(ctx, unitIndex, opts) {
     return;
   }
 
-  /* soft lighting: one linear gradient across the face, light from upper left */
+  /* soft lighting: one linear gradient across the face, light from upper left.
+     A flipped coin shows its other face, which takes a little more of the
+     shade so the two sides read as two sides. */
   var g = ctx.createLinearGradient(-R * 0.75, -R * 0.85, R * 0.7, R * 0.9);
   g.addColorStop(0, sk.face);
-  g.addColorStop(0.55, sk.face);
+  g.addColorStop(flip !== null && flip < 0 ? 0.3 : 0.55, sk.face);
   g.addColorStop(1, sk.face2);
   ctx.fillStyle = g;
   fillP();
@@ -2165,7 +2222,7 @@ function drawDie(ctx, unitIndex, opts) {
     ctx.save();
     clipP();
     var fv = polyPoints(sides, R, rot);          // one build for the whole loop
-    for (i = 0; i < sides; i++) faceFill(ctx, die, i, sk, fv);
+    for (i = 0; i < sides; i++) faceBand(ctx, die, i, sk, fv);
     ctx.restore();
   }
 
@@ -2207,13 +2264,26 @@ function drawDie(ctx, unitIndex, opts) {
     ctx.restore();
   }
 
-  if (opts.labels) drawFaceMarks(ctx, opts, sides, R, rot, die, sk);
+  if (opts.labels) {
+    if (flip !== null) opts = Object.assign({}, opts, { flip: flip });
+    drawFaceMarks(ctx, opts, sides, R, rot, die, sk);
+  }
   ctx.restore();
 }
 
+/* Numerals stay upright on the screen (never rotated with the face) and each
+   face's mark - the small ×2 / ×3 tag or the ★ - sits on its band, at the edge.
+   The tag used to hang off the numeral's own text frame, and that frame was
+   flipped face by face to keep the numeral upright, so the ×2 landed toward
+   the centre on some faces and toward the rim on others (Nate, 2026-09-24:
+   "the 2x doesnt seem to always appear on the bottom of the face consistently
+   for all dice"). Anchoring the tag to the geometry - the edge - puts it in
+   the same place on every face of every die at every rotation. */
+var UPRIGHT_NUMERALS = true;
+
 function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
   var P = THEME.palette;
-  var i, f, ang, px, py, rotText;
+  var i, f, ang, px, py, rotText, type;
   var mode2 = readMode(sides);
 
   /* During the 600 ms + SIDE morph the outline is interpolating between two
@@ -2234,50 +2304,30 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
         faces.indexOf(opts.landed) < 0) faces.push(opts.landed);
   }
   var edgeLen = sides >= 3 ? 2 * R * Math.sin(Math.PI / sides) : R;
+  var apo = sides >= 3 ? Math.cos(Math.PI / sides) : 1;   // apothem, as a fraction of R
 
-  /* Ticks stand in for every face that has no numeral - but a doubled or
-     jackpot face always gets its own, longer and in its own colour. Without
-     that, every x2 the player buys past 13 sides was invisible: the wedge tint
-     is 3.6 degrees wide on a 100-gon and the numerals are gone.
-     Ticks are drawn during a morph too. Past 13 sides a one-side step moves
-     each vertex by a fraction of an edge, so a tick on the new edge sits on
-     the swelling outline; hiding them turned a two-second hold on a 60-side
-     die into two seconds of a blank disc. */
+  /* Ticks stand in for every face that has no numeral. A doubled or jackpot
+     face needs none: its band is the mark, and it survives any side count
+     (at 100 sides the band is a coloured notch where a numeral would be a
+     smudge). Ticks are drawn during a morph too. Past 13 sides a one-side
+     step moves each vertex by a fraction of an edge, so a tick on the new
+     edge sits on the swelling outline; hiding them turned a two-second hold
+     on a 60-side die into two seconds of a blank disc. */
   if (sides >= 3 && faces.length < sides) {
     var step = mode2 === 'window' ? Math.ceil(sides / 40) : 1;
     var thin = Math.max(1, Math.min(2, R * 0.02));
-    var thick = Math.max(1.6, Math.min(3.4, R * 0.035));
     ctx.save();
+    ctx.lineWidth = thin;
+    ctx.globalAlpha = 0.34;
+    ctx.strokeStyle = sk.ink;
     for (i = 0; i < sides; i++) {
       if (faces.indexOf(i) >= 0) continue;
-      var tt = E.faceType(die, i);
-      if (tt === 'normal' && (i % step) !== 0) continue;
+      if ((i % step) !== 0 || E.faceType(die, i) !== 'normal') continue;
       ang = edgeAngle(sides, i, rot);
-      ctx.lineWidth = tt === 'normal' ? thin : thick;
-      ctx.globalAlpha = tt === 'normal' ? 0.34 : 0.95;
-      ctx.strokeStyle = tt === 'jack' ? P.gold : tt === 'x2' ? P.tint : sk.ink;
       ctx.beginPath();
-      ctx.moveTo(Math.cos(ang) * R * (tt === 'normal' ? 0.78 : 0.66),
-                 Math.sin(ang) * R * (tt === 'normal' ? 0.78 : 0.66));
+      ctx.moveTo(Math.cos(ang) * R * 0.78, Math.sin(ang) * R * 0.78);
       ctx.lineTo(Math.cos(ang) * R * 0.90, Math.sin(ang) * R * 0.90);
       ctx.stroke();
-      /* A pip on the rim as well as the spoke. Past 13 sides the wedge tint is
-         a few degrees wide and the tick is one line among a hundred, so a
-         player could not see which face they had just bought - the doubled and
-         jackpot faces were effectively invisible on the die they were bought
-         for. A filled dot survives any side count. */
-      if (tt !== 'normal') {
-        ctx.beginPath();
-        ctx.arc(Math.cos(ang) * R * 0.925, Math.sin(ang) * R * 0.925,
-                Math.max(1.8, Math.min(4, R * 0.036)), 0, Math.PI * 2);
-        ctx.fillStyle = tt === 'jack' ? P.gold : P.tint;
-        ctx.fill();
-        /* an ink ring, so the pip reads on skins whose face is close to the
-           tint or the gold (dark JADE, dark EMBER, dark BONE) */
-        ctx.lineWidth = 1.2;
-        ctx.strokeStyle = sk.ink;
-        ctx.stroke();
-      }
     }
     ctx.restore();
   }
@@ -2285,31 +2335,73 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
 
+  /* the tags on the bands: one per doubled or jackpot face, parallel to its
+     edge, upright, and only where the edge is long enough to carry it */
+  if (sides >= 3 && (die.x2 > 0 || die.jack > 0) && !wide) {
+    var tagFs = Math.max(7.5, Math.min(13, R * BAND_W * 0.78));
+    var bandR = R * (1 - BAND_W * 0.5) * apo;
+    ctx.save();
+    ctx.font = '700 ' + tagFs.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
+    var tagW = ctx.measureText('×' + die.tier).width;
+    ctx.globalAlpha = opts.labelAlpha;
+    for (i = 0; i < sides; i++) {
+      type = E.faceType(die, i);
+      if (type === 'normal') continue;
+      if (type === 'x2' && edgeLen * apo < tagW + tagFs * 0.9) continue;
+      ang = edgeAngle(sides, i, rot);
+      rotText = ang - Math.PI / 2;
+      if (Math.cos(rotText) < 0) rotText += Math.PI;      // never upside down
+      ctx.save();
+      ctx.translate(Math.cos(ang) * bandR, Math.sin(ang) * bandR);
+      ctx.rotate(rotText);
+      ctx.fillStyle = type === 'jack' ? sk.ink : sk.face;
+      if (type === 'jack') {
+        ctx.font = '700 ' + (tagFs * 1.05).toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
+        ctx.fillText('★', 0, tagFs * 0.06);
+      } else {
+        ctx.fillText('×' + die.tier, 0, tagFs * 0.08);
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
   if (faces.length) {
     var fs = Math.max(9, Math.min(sides === 2 ? 24 : 32,
       (mode2 === 'full' ? edgeLen * 0.42 : R * 0.16)));
-    var labelR = sides === 1 ? 0 : sides === 2 ? 0.26 : mode2 === 'full' ? 0.62 : 0.68;
+    /* The numeral sits on its face's own apothem, inside the band: 0.62R was
+       right for a hexagon and outside a triangle altogether (its apothem is
+       0.5R). The lens and the disc keep their fixed spots. */
+    var labelR = sides === 1 ? 0 : sides === 2 ? 0.26
+               : Math.max(0.3, apo * (1 - BAND_W) - (fs * 0.42 + R * 0.04) / R);
     for (i = 0; i < faces.length; i++) {
       f = faces[i];
       ang = edgeAngle(sides, f, rot);
       px = Math.cos(ang) * R * labelR;
       py = Math.sin(ang) * R * labelR;
-      rotText = sides <= 2 ? 0 : ang - Math.PI / 2;
-      if (Math.cos(rotText) < 0) rotText += Math.PI;      // keep numerals upright
+      if (sides <= 1) rotText = opts.lean || 0;          // the disc's 1 rocks with it
+      else if (sides === 2 || UPRIGHT_NUMERALS) rotText = 0;
+      else {
+        rotText = ang - Math.PI / 2;
+        if (Math.cos(rotText) < 0) rotText += Math.PI;
+      }
       var pop = (opts.stampFace === f) ? opts.stampScale : 1;
-      var type = E.faceType(die, f);
       ctx.save();
       ctx.translate(px, py);
       ctx.rotate(rotText);
       ctx.scale(pop, pop);
-      ctx.globalAlpha = (opts.quiet && f === opts.landed) ? 1 : opts.labelAlpha;
+      var la = (opts.quiet && f === opts.landed) ? 1 : opts.labelAlpha;
+      if (opts.flip !== undefined) {
+        /* the context is squashed by the flip: undo the mirror so the numeral
+           foreshortens with the coin but never reads upside down, and let it
+           go when the coin is edge-on */
+        ctx.scale(1, opts.flip < 0 ? -1 : 1);
+        la *= Math.min(1, Math.abs(opts.flip) / 0.35);
+      }
+      ctx.globalAlpha = la;
       ctx.font = '600 ' + fs.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
       ctx.fillStyle = sk.ink;
-      ctx.fillText(THEME.faceLabel(f), 0, type === 'normal' ? 0 : -fs * 0.16);
-      if (type !== 'normal') {
-        ctx.font = '600 ' + (fs * 0.42).toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
-        ctx.fillText(type === 'jack' ? '★' : '×' + die.tier, 0, fs * 0.44);
-      }
+      ctx.fillText(THEME.faceLabel(f), 0, 0);
       ctx.restore();
     }
   }
@@ -2338,12 +2430,12 @@ function drawFaceMarks(ctx, opts, sides, R, rot, die, sk) {
        said without a word. The numerals on the rim wait for the settle. */
     ctx.globalAlpha = (opts.quiet || opts.fromHold) ? 1 : opts.labelAlpha;
     roundRect(ctx, -wWidth / 2, wy - wHeight / 2, wWidth, wHeight, wHeight * 0.28);
-    ctx.fillStyle = type2 === 'jack' ? P.gold : type2 === 'x2' ? P.tint : sk.face2;
+    ctx.fillStyle = type2 === 'jack' ? sk.jack : type2 === 'x2' ? sk.x2 : sk.face2;
     ctx.fill();
     ctx.lineWidth = 1.5;
     ctx.strokeStyle = sk.rim;
     ctx.stroke();
-    ctx.fillStyle = sk.ink;
+    ctx.fillStyle = type2 === 'x2' ? sk.face : sk.ink;
     ctx.font = '700 ' + wf.toFixed(1) + 'px ui-monospace, Menlo, Consolas, monospace';
     ctx.fillText(label, 0, wy + wf * 0.03);
     if (type2 !== 'normal') {
@@ -2384,32 +2476,101 @@ function hotActive() { return hotLeftMs() > 0; }
    is about ten. Multiplied through ECON's own helper, not in the renderer. */
 function maxRollNow() { return E.mul(E.maxRoll(st.dice), E.multiplier(st, Date.now())); }
 
-function doRoll(animate) {
+/* ---- the throw ------------------------------------------------------------
+   Every roll is a throw: the die hops off the ground line, turns in the air
+   and lands flat under the marker with a squash and its dust. The turn is
+   sized to the time it has. A tap gets a whole extra turn in 420 ms; an
+   auto-roll at five a second gets only the turn to the landed face in 170 ms,
+   so the die visibly lands on every result instead of spinning without rest.
+   v2 gave every roll two full turns in 380 ms, which moved a hexagon 60 to
+   120 degrees a frame: on a 60 Hz screen that is not a spin but a flicker of
+   random faces, and under the roller it never stopped (Nate, 2026-09-24:
+   "im also not a fan of the auto flip animation"). */
+var THROW = {
+  TAP_S: 0.42,        // a tap's throw, air and landing together
+  MIN_S: 0.16,        // the shortest throw an auto-roll gets
+  TURN_S: 0.34,       // a throw at least this long gets a whole extra turn
+  HOP: 0.30,          // hop height as a fraction of R, for a full-length throw
+  COIN_HOP: 0.42      // the two-sided coin is tossed a little higher
+};
+
+/* The one-sided die cannot be flipped: it has nowhere to land but where it
+   is. A tap kicks it and it rocks on its flat like a weeble, tipping onto its
+   round side and falling back, until it settles on its only face. A damped
+   oscillator, kicked alternately left and right, with the lean capped so a
+   fast roller can never tip it over. (Nate, 2026-09-24: "1 sided shouldnt
+   even be able to be flipped, as kinda a joke about a 1 sided dice") */
+var ROCK = {
+  K: 90,              // spring: 9.5 rad/s, a 0.66 s rock
+  C: 3.0,             // damping: the rock is gone in about two seconds
+  KICK: 5.6,          // rad/s per tap, a lean of about 33 degrees
+  MAX_V: 8,
+  MAX_LEAN: 0.8
+};
+
+function rockDie(an) {
+  an.rockSign = -(an.rockSign || 1);
+  var kick = ROCK.KICK * (0.85 + 0.3 * Math.random()) * an.rockSign;
+  /* a kick against the swing cancels it, one with it adds; the cap keeps
+     the disc on the ground either way */
+  an.rockV = Math.max(-ROCK.MAX_V, Math.min(ROCK.MAX_V, (an.rockV || 0) + kick));
+  an.mode = 'rock';
+  an.from = an.to = an.rot;
+}
+
+/* The height a throw is at right now, in units of R: the hop parabola plus
+   whatever height it inherited from a throw it interrupted. */
+function hopNow(an) {
+  if (an.mode !== 'throw' || an.t >= THROW_LAND) return 0;
+  var u = an.t / THROW_LAND;
+  return (an.hopFrom || 0) * (1 - u) * (1 - u) + an.hop * 4 * u * (1 - u);
+}
+
+/* Aims die `i` at face `idx` with a throw that fits `interval` seconds. A die
+   thrown again while still in the air keeps its height: the new hop starts
+   from where it is instead of snapping to the ground and jumping. */
+function throwDie(i, idx, interval) {
+  var an = unitAnim(i), sides = st.dice[i].n;
+  var carry = hopNow(an);
+  an.index = idx;
+  an.flash = 0;
+  an.paid = false;
+  an.t = 0;
+  an.dur = Math.max(THROW.MIN_S, Math.min(THROW.TAP_S, interval * 0.85));
+  an.hopFrom = carry;
+  if (sides <= 1) { rockDie(an); an.hop = 0; return; }
+  var target = rotationFor(sides, idx);
+  var delta = target - (an.rot % (2 * Math.PI));
+  while (delta <= 0) delta += 2 * Math.PI;
+  var turns = an.dur >= THROW.TURN_S ? 1 : 0;
+  an.from = an.rot;
+  an.to = an.rot + delta + turns * 2 * Math.PI;
+  an.hop = (sides === 2 ? THROW.COIN_HOP : THROW.HOP) * Math.min(1, an.dur / THROW.TAP_S);
+  an.mode = 'throw';
+}
+
+function throwSound() {
+  var d = st.dice[0];
+  Audio2.play(d.n <= 1 ? 'rock' : d.n === 2 ? 'flip' : 'roll');
+}
+
+function doRoll(animate, interval) {
   hotLeftMs();                       // re-clamp before any payout reads hotUntil
   var res = E.roll(st, Math.random, Date.now());
   flushLand();                       // the previous throw never goes unpaid
   G.lastResult = res;
   var i;
   for (i = 0; i < st.dice.length; i++) {
-    var an = unitAnim(i);
-    var sides = st.dice[i].n;
-    var target = rotationFor(sides, res.indices[i]);
-    if (animate) {
-      var from = an.rot;
-      var delta = target - (from % (2 * Math.PI));
-      while (delta <= 0) delta += 2 * Math.PI;
-      an.from = from;
-      an.to = from + delta + 4 * Math.PI;         // two full turns, then settle
-      an.t = 0;
-      an.dur = 0.38;
-    } else {
-      an.rot = target;
+    if (animate) throwDie(i, res.indices[i], interval || THROW.TAP_S / 0.85);
+    else {
+      var an = unitAnim(i);
+      an.rot = rotationFor(st.dice[i].n, res.indices[i]);
       an.t = 1;
+      an.index = res.indices[i];
+      an.flash = 0.12;
     }
-    an.index = res.indices[i];
-    an.flash = animate ? 0 : 0.12;
   }
-  if (animate) { Audio2.play('roll'); G.pendingLand = res; }
+  if (animate) { throwSound(); G.pendingLand = res; }
   else landResult(res);
   markDirty();
   return res;
@@ -2731,6 +2892,13 @@ function steerRoll(an, shift) {
    outline the new morph should start from, in the frame it will be drawn in. */
 function rebaseForGrowth(unitIndex, newSides, cur, hadMorph) {
   var an = unitAnim(unitIndex), oldSides = newSides - 1;
+  if (an.mode === 'rock') {
+    /* the disc becomes a lens: the morph starts from the disc exactly as it
+       leans this frame and lands the lens upright, and the spring lets go */
+    var lean = an.rot;
+    an.mode = ''; an.rockV = 0; an.rot = 0; an.t = 1; an.paid = true;
+    return rotatePts(cur, lean);
+  }
   if (G.fastMode) {                       // spin phase drives rot; nothing to steer
     if (an.snap > 0) an.snapRot = rotationFor(newSides, an.index);
     return cur;
@@ -3560,8 +3728,12 @@ function onTap(ev) {
      and a sleeping clock would swallow every tap until it woke */
   var wall = performance.now() / 1000;
   if (wall - G.tapGuard < E.K.TAP_COOLDOWN_S) return;
+  /* a throw fits the player's own rhythm: a lone tap gets the full throw, a
+     fast tapper gets shorter ones that land before the next tap, the same
+     rule the roller follows */
+  var gap = Math.min(THROW.TAP_S / 0.85, Math.max(0.2, wall - G.tapGuard));
   G.tapGuard = wall;
-  doRoll(!G.fastMode);
+  doRoll(!G.fastMode, gap);
   markDirty();
   wake();
 }
@@ -3580,6 +3752,7 @@ function busy() {
   var i;
   for (i = 0; i < G.anims.length; i++) {
     if (G.anims[i].t < 1 || G.anims[i].flash > 0 || G.anims[i].glow > 0) return true;
+    if (G.anims[i].mode === 'rock') return true;
   }
   return false;
 }
@@ -3651,15 +3824,8 @@ function update(dt) {
         flushLand();                                // never drop an unpaid throw
         G.lastResult = last;
         for (j = 0; j < st.dice.length; j++) {
-          var an = unitAnim(j);
-          an.index = last.indices[j];
-          if (G.fastMode) { an.t = 1; }
-          else {
-            var target = rotationFor(st.dice[j].n, last.indices[j]);
-            var delta = target - (an.rot % (2 * Math.PI));
-            while (delta <= 0) delta += 2 * Math.PI;
-            an.from = an.rot; an.to = an.rot + delta + 4 * Math.PI; an.t = 0; an.dur = 0.38;
-          }
+          if (G.fastMode) { unitAnim(j).index = last.indices[j]; unitAnim(j).t = 1; }
+          else throwDie(j, last.indices[j], 1 / rate);
         }
         if (G.fastMode) landResult(last);
         else G.pendingLand = last;
@@ -3676,7 +3842,7 @@ function update(dt) {
       G.snapAcc = 0;
       for (i = 0; i < st.dice.length; i++) {
         var a2 = unitAnim(i);
-        a2.snap = 0.06;
+        a2.snap = 0.08;
         a2.snapRot = rotationFor(st.dice[i].n, a2.index);
       }
     }
@@ -3688,14 +3854,30 @@ function update(dt) {
     for (i = 0; i < G.anims.length; i++) G.anims[i].snap = 0;
   }
 
-  /* per-die settle: easeOutQuart plus a short overshoot at the end */
+  /* per-die motion: the throw turns in the air and pays the moment it lands;
+     the one-sided disc rocks on its spring. `sweep` is how far the die turned
+     this frame, which is what sizes the motion blur and fades the numerals. */
   for (i = 0; i < G.anims.length; i++) {
-    var a = G.anims[i];
+    var a = G.anims[i], was = a.rot;
+    if (a.mode === 'rock') {
+      a.rockV += (-ROCK.K * a.rot - ROCK.C * a.rockV) * dt;
+      a.rot += a.rockV * dt;
+      if (a.rot > ROCK.MAX_LEAN) { a.rot = ROCK.MAX_LEAN; a.rockV = Math.min(0, a.rockV); }
+      if (a.rot < -ROCK.MAX_LEAN) { a.rot = -ROCK.MAX_LEAN; a.rockV = Math.max(0, a.rockV); }
+      if (Math.abs(a.rot) < 0.003 && Math.abs(a.rockV) < 0.03) { a.rot = 0; a.rockV = 0; a.mode = ''; }
+    }
     if (a.t < 1) {
       a.t = Math.min(1, a.t + dt / a.dur);
-      a.rot = a.from + (a.to - a.from) * rollEase(a.t);
-      if (a.t >= 1 && i === 0) flushLand();
+      if (a.mode === 'throw') a.rot = a.from + (a.to - a.from) * rollEase(a.t);
+      if (!a.paid && a.t >= THROW_LAND) {
+        a.paid = true;
+        if (a.mode === 'throw') a.rot = a.to;   // flat on the face, exactly
+        if (i === 0) flushLand();
+      }
+      if (a.t >= 1 && a.mode === 'throw') a.mode = '';
     }
+    a.sweep = Math.abs(a.rot - was);
+    a.omega = dt > 0 ? a.sweep / dt : 0;
     if (a.flash > 0) a.flash = Math.max(0, a.flash - dt);
     if (a.glow > 0) a.glow = Math.max(0, a.glow - dt);
   }
@@ -3830,13 +4012,27 @@ function draw() {
     var x = unitX(i, count);
     var rot = an.rot;
     var labels = true;
+    /* numerals fade with the die's angular speed: crisp at rest, gone in the
+       blur, back as the throw slows - the way a spinning wheel reads */
+    var speedAlpha = Math.max(0.1, Math.min(1, 1 - (an.omega - 6) / 14));
+    var bob = 0;
 
     if (G.fastMode) {
-      if (an.snap > 0) { rot = an.snapRot; labels = true; }
-      else { rot = G.spinPhase + i * 0.7; labels = false; }
+      if (an.snap > 0) {
+        rot = an.snapRot; speedAlpha = 1;
+        bob = 3 * (an.snap / 0.08);              // each strobe lands with a tick
+      } else if (sides <= 1) {
+        rot = 0.05 * Math.sin(G.spinPhase * 3);  // the disc shivers, it cannot spin
+        speedAlpha = 1;
+      } else {
+        rot = G.spinPhase + i * 0.7;
+        speedAlpha = 0.3;
+      }
     }
 
-    var depth = bottomOf(sides, R, rot);
+    var depth = sides === 2 && !G.morphs[i]
+              ? R * 0.45 * Math.max(0.07, Math.abs(Math.cos(rot)))
+              : bottomOf(sides, R, rot);
     var morphPts = null;
     var mo = G.morphs[i] || null;
 
@@ -3859,39 +4055,48 @@ function draw() {
     var mt = mo ? Math.min(1, mo.t) : 1;
     var fadeIn = mo ? Math.max(0, (mt - 0.55) / 0.45) : 1;
 
-    var y = gy - depth;
+    /* the throw: a hop over the first THROW_LAND of the tween, then the
+       landing squash on the ground, anchored at the contact point */
+    var hopY = 0, squash = 1, squashY = 1;
+    if (an.mode === 'throw' && an.t < 1) {
+      hopY = hopNow(an) * R;
+      if (an.t > THROW_LAND) {
+        var q = Math.sin(Math.PI * (an.t - THROW_LAND) / (1 - THROW_LAND));
+        var amt = 0.06 + 0.08 * Math.min(1, an.hop / THROW.HOP);
+        squashY = 1 - amt * q;
+        squash = 1 + amt * 0.5 * q;
+      }
+    }
+    var y = gy - depth - hopY - bob;
     var g = dieGeom(i);
     g.x = x; g.y = y; g.R = R; g.top = y - R;
 
-    /* soft contact shadow */
+    /* soft contact shadow: it shrinks and fades as the die leaves the ground */
+    var lift = Math.min(1, (hopY + bob) / Math.max(1, R * 0.35));
     cx.save();
-    cx.globalAlpha = 0.3;
+    cx.globalAlpha = 0.3 * (1 - 0.6 * lift);
     cx.fillStyle = P.line;
     cx.beginPath();
-    cx.ellipse(x, gy + 4, R * 0.72, 5, 0, 0, Math.PI * 2);
+    cx.ellipse(x, gy + 4, R * 0.72 * (1 - 0.3 * lift), 5 * (1 - 0.3 * lift), 0, 0, Math.PI * 2);
     cx.fill();
     cx.restore();
-
-    var squash = 1, squashY = 1;
-    if (an.t < 1) {
-      var qz = an.t;
-      var s = qz < 0.35 ? 1 - 0.12 * (qz / 0.35)
-            : qz < 0.7 ? 0.88 + 0.18 * ((qz - 0.35) / 0.35)
-            : 1.06 - 0.06 * ((qz - 0.7) / 0.3);
-      squashY = s;
-      squash = 1 + (1 - s) * 0.5;
-    }
 
     var opts = {
       die: die, sides: sides, R: R, rot: rot, x: x, y: y,
       sx: squash, sy: squashY,
-      landed: an.index, flash: an.flash, glow: an.glow,
+      /* while a throw is in the air the value window reads whatever face is
+         under the marker right now, so a 100-side die counts into its result
+         instead of announcing it before it has landed */
+      landed: (an.mode === 'throw' && an.t < THROW_LAND && !G.fastMode) ? faceUnder(sides, rot) : an.index,
+      flash: an.flash, glow: an.glow,
       pulse: !!sideTgt && sideTgt.unit === i && !anyMorph(),
       time: G.now,
       labels: labels,
+      anchor: depth,
+      lean: sides <= 1 ? rot : 0,
       /* numerals stamp when the shape settles: a chained step keeps them out,
          the settle fades them in and pops the new top face 1.6x -> 1.0 */
-      labelAlpha: mo ? (mo.quiet ? 0 : fadeIn) : 1,
+      labelAlpha: (mo ? (mo.quiet ? 0 : fadeIn) : 1) * speedAlpha,
       stampFace: mo ? mo.newFace : -1,
       stampScale: mo ? (mo.quiet ? 1 + 0.14 * (1 - mt)
                                : mo.fromHold ? 1.25 - 0.25 * fadeIn : 1.6 - 0.6 * fadeIn) : 1,
@@ -3902,13 +4107,17 @@ function draw() {
       ghost: false
     };
 
-    /* motion ghosts: three while settling, a symmetric blur while spinning -
-       and a growing die keeps them, because it keeps rolling */
-    if (an.t < 1 && !G.fastMode) {
-      for (var gI = 1; gI <= 3; gI++) {
+    /* motion blur: ghosts spread over the angle the die turned THIS frame,
+       so a fast turn smears and a slow one stays crisp. Fixed 5-degree
+       ghosts (v2) covered a tenth of a fast frame's turn and the rest was
+       flicker. A growing die keeps them, because it keeps rolling. */
+    if (an.sweep > 0.03 && !G.fastMode && an.mode === 'throw') {
+      var gk = Math.min(6, Math.ceil(an.sweep / 0.08));
+      var ga = Math.min(0.16, 0.5 / gk);
+      for (var gI = 1; gI <= gk; gI++) {
         cx.save();
-        cx.globalAlpha = 0.09;
-        drawDie(cx, i, Object.assign({}, opts, { spin: -gI * 0.09, ghost: true }));
+        cx.globalAlpha = ga;
+        drawDie(cx, i, Object.assign({}, opts, { spin: -an.sweep * gI / (gk + 1), ghost: true }));
         cx.restore();
       }
     }
@@ -3922,8 +4131,10 @@ function draw() {
 
     THEME.drawFace(cx, i, opts);
 
-    /* the fixed marker every landed face rotates under */
-    var my = y - R - 5;
+    /* the fixed marker every landed face rotates under: fixed means fixed,
+       so it sits at the die's REST height and the die hops up under it */
+    var restDepth = mo ? depth : (sides === 2 ? R * 0.45 : bottomOf(sides, R, 0));
+    var my = gy - restDepth - R - 5;
     cx.beginPath();
     cx.moveTo(x - 6, my - 9);
     cx.lineTo(x + 6, my - 9);
